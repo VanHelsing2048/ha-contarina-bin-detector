@@ -2,6 +2,15 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.6.0] - 2026-07-08
+
+### Changed
+
+- Detection now opens RTSP, captures a fresh frame, analyzes it and closes RTSP on each scan.
+- Default scan interval is now 300 seconds.
+- Default stable frame count is now 1.
+- Web UI frame refresh captures a fresh frame on demand.
+
 ## [0.5.0] - 2026-07-08
 
 ### Added

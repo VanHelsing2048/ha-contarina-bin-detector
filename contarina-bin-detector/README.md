@@ -22,6 +22,12 @@ The sensor state is one of:
 
 The Web UI saves settings to `/data/settings.json`. The detector reloads them while running, so most changes do not require restarting the add-on.
 
+## Scan Frequency
+
+The detector captures a fresh RTSP frame for each scan, analyzes it, closes the RTSP stream and waits for the next scan. The default interval is 300 seconds, so one scan every 5 minutes.
+
+The **Refresh frame** button in the Web UI also captures a fresh frame on demand.
+
 ## Expected Collection Sensor
 
 If another Home Assistant integration exposes the expected collection as `Carta`, `VPL`, `Umido` or `Secco`, add that entity in the **Collection sensor** field.

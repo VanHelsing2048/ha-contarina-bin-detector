@@ -19,6 +19,18 @@ All user configuration is graphical. Use **Open Web UI** from the Home Assistant
 
 Settings are persisted in `/data/settings.json`.
 
+## Scan Model
+
+The add-on does not continuously analyze the RTSP stream. On each scan it:
+
+1. opens the RTSP stream;
+2. reads a few frames and keeps the latest one;
+3. closes the RTSP stream;
+4. analyzes the captured frame;
+5. waits for the next scan.
+
+The default scan interval is 300 seconds. This is intended for low-frequency checks such as verifying whether the bin has been put out.
+
 ## Web UI Sections
 
 ### Camera and Sensor

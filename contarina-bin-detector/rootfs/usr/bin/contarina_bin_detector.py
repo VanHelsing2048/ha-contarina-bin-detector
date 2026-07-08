@@ -51,8 +51,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "blue_hsv_upper": [130, 255, 255],
     "min_color_ratio": 0.08,
     "min_brightness": 35,
-    "consecutive_frames": 3,
-    "scan_interval": 10,
+    "consecutive_frames": 1,
+    "scan_interval": 300,
     "monitor_days": ["mon"],
     "active_time_start": "00:00",
     "active_time_end": "23:59",
@@ -311,28 +311,29 @@ def capture_snapshot(rtsp_url: str) -> bytes:
     if not rtsp_url:
         raise RuntimeError("Configure the RTSP URL first.")
 
+    frame = capture_fresh_frame(rtsp_url)
     with LATEST_FRAME_LOCK:
-        frame = None if LATEST_FRAME is None else LATEST_FRAME.copy()
+        global LATEST_FRAME
+        LATEST_FRAME = frame.copy()
+    return encode_snapshot(frame)
 
-    if frame is not None:
-        return encode_snapshot(frame)
 
+def capture_fresh_frame(rtsp_url: str, discard_frames: int = 5) -> np.ndarray:
     capture = open_stream(rtsp_url)
     try:
         if not capture.isOpened():
             raise RuntimeError("RTSP stream is not open")
 
         frame = None
-        for _ in range(5):
+        for _ in range(max(1, discard_frames)):
             ok, candidate = capture.read()
             if ok and candidate is not None:
                 frame = candidate
-                break
 
         if frame is None:
             raise RuntimeError("Could not read RTSP frame")
 
-        return encode_snapshot(frame)
+        return frame
     finally:
         capture.release()
 
@@ -703,14 +704,45 @@ def start_web_ui() -> None:
     log(f"Web UI listening on port {UI_PORT}")
 
 
+def analyze_frame(
+    frame: np.ndarray,
+    settings: dict[str, Any],
+    current_candidate: str,
+    hits: int,
+) -> tuple[str, str, int, dict[str, Any], dict[str, float], float, bool, bool]:
+    min_ratio = float(settings.get("min_color_ratio", 0.08))
+    required_frames = max(1, int(settings.get("consecutive_frames", 1)))
+    ratios = color_ratios(frame, settings)
+    brightness = roi_brightness(frame, settings)
+    collection = expected_collection(settings)
+    candidate_color = detected_color(ratios, min_ratio)
+
+    if candidate_color != NONE_STATE and candidate_color == current_candidate:
+        hits += 1
+    else:
+        current_candidate = candidate_color
+        hits = 1 if candidate_color != NONE_STATE else 0
+
+    stable_color = candidate_color if hits >= required_frames else NONE_STATE
+    scheduled = is_scheduled_now(settings)
+    verification_active = scheduled and collection["verification_active"]
+    too_dark = verification_active and brightness < int(settings["min_brightness"])
+    if too_dark:
+        state = DARK_STATE
+    elif verification_active:
+        state = stable_color
+    else:
+        state = NONE_STATE
+
+    return state, current_candidate, hits, collection, ratios, brightness, scheduled, too_dark
+
+
 def main() -> int:
     global LATEST_FRAME
 
     current_candidate = NONE_STATE
     hits = 0
     last_publish_signature: tuple[Any, ...] | None = None
-    current_rtsp_url = ""
-    capture: cv2.VideoCapture | None = None
 
     log("Starting Contarina bin detector")
     start_web_ui()
@@ -718,61 +750,30 @@ def main() -> int:
     while True:
         settings = load_settings()
         rtsp_url = settings["rtsp_url"].strip()
-        interval = max(1, int(settings.get("scan_interval", 10)))
-        required_frames = max(1, int(settings.get("consecutive_frames", 3)))
-        min_ratio = float(settings.get("min_color_ratio", 0.08))
+        interval = max(1, int(settings.get("scan_interval", 300)))
 
         if not rtsp_url:
             log("Waiting for RTSP URL configuration from Web UI")
-            time.sleep(interval)
+            time.sleep(min(interval, 30))
             continue
 
-        if capture is None or rtsp_url != current_rtsp_url:
-            if capture is not None:
-                capture.release()
-            current_rtsp_url = rtsp_url
-            capture = open_stream(rtsp_url)
-            with LATEST_FRAME_LOCK:
-                LATEST_FRAME = None
-
-        if not capture.isOpened():
-            log("RTSP stream is closed; reconnecting in 10 seconds")
-            capture.release()
-            capture = None
-            time.sleep(10)
+        try:
+            frame = capture_fresh_frame(rtsp_url)
+        except Exception as error:
+            log(f"Could not capture RTSP snapshot: {error}")
+            time.sleep(min(interval, 60))
             continue
 
-        ok, frame = capture.read()
-        if not ok or frame is None:
-            log("Could not read frame; reconnecting in 10 seconds")
-            capture.release()
-            capture = None
-            time.sleep(10)
-            continue
 
         with LATEST_FRAME_LOCK:
             LATEST_FRAME = frame.copy()
 
-        ratios = color_ratios(frame, settings)
-        brightness = roi_brightness(frame, settings)
-        collection = expected_collection(settings)
-        candidate_color = detected_color(ratios, min_ratio)
-        if candidate_color != NONE_STATE and candidate_color == current_candidate:
-            hits += 1
-        else:
-            current_candidate = candidate_color
-            hits = 1 if candidate_color != NONE_STATE else 0
-
-        stable_color = candidate_color if hits >= required_frames else NONE_STATE
-        scheduled = is_scheduled_now(settings)
-        verification_active = scheduled and collection["verification_active"]
-        too_dark = verification_active and brightness < int(settings["min_brightness"])
-        if too_dark:
-            state = DARK_STATE
-        elif verification_active:
-            state = stable_color
-        else:
-            state = NONE_STATE
+        state, current_candidate, hits, collection, ratios, brightness, scheduled, too_dark = analyze_frame(
+            frame,
+            settings,
+            current_candidate,
+            hits,
+        )
 
         publish_signature = (
             state,

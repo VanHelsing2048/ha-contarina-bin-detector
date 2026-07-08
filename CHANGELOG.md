@@ -4,6 +4,15 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.6.0] - 2026-07-08
+
+### Changed
+
+- Changed detection to capture a fresh RTSP snapshot per scan instead of keeping the stream open continuously.
+- Set the default scan interval to 300 seconds.
+- Set the default stable frame count to 1 for five-minute scans.
+- The Web UI refresh action now captures a fresh frame on demand.
+
 ## [0.5.0] - 2026-07-08
 
 ### Added
