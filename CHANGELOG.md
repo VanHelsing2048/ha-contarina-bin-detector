@@ -4,6 +4,13 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.8.0] - 2026-07-08
+
+### Changed
+
+- Updated default HSV color ranges using the provided CAR, SEC and VPL reference images.
+- Added a Web UI action to reapply the Contarina color presets to existing settings.
+
 ## [0.7.0] - 2026-07-08
 
 ### Added

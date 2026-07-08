@@ -22,6 +22,16 @@ The sensor state is one of:
 
 The Web UI saves settings to `/data/settings.json`. The detector reloads them while running, so most changes do not require restarting the add-on.
 
+## Contarina Color Presets
+
+The default HSV ranges are based on the provided reference images:
+
+- CAR/carta yellow: `yellow_hsv_lower [14, 70, 90]`, `yellow_hsv_upper [34, 255, 255]`
+- SEC/secco gray: `gray_hsv_lower [0, 0, 55]`, `gray_hsv_upper [179, 55, 190]`
+- VPL blue: `blue_hsv_lower [92, 55, 50]`, `blue_hsv_upper [118, 255, 230]`
+
+If the add-on already has saved settings, use **Apply Contarina color presets** in the Web UI and then save the configuration.
+
 ## Smartphone Notifications
 
 Enable notifications in the Web UI and set the Home Assistant mobile notify service, for example:

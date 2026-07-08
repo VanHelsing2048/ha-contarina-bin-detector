@@ -97,6 +97,14 @@ Configure HSV lower and upper bounds for:
 
 OpenCV HSV uses hue from 0 to 179 and saturation/value from 0 to 255.
 
+The default Contarina presets are derived from the supplied CAR, SEC and VPL reference images:
+
+- CAR/carta yellow: lower `[14, 70, 90]`, upper `[34, 255, 255]`.
+- SEC/secco gray: lower `[0, 0, 55]`, upper `[179, 55, 190]`.
+- VPL blue: lower `[92, 55, 50]`, upper `[118, 255, 230]`.
+
+Use **Apply Contarina color presets** in the Web UI if existing saved settings still contain older thresholds.
+
 ### ROI
 
 The ROI editor displays an RTSP snapshot and lets you draw the rectangle directly on the image. The saved rectangle uses the original frame pixel coordinates.

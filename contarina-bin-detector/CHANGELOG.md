@@ -2,6 +2,13 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.8.0] - 2026-07-08
+
+### Changed
+
+- Updated gray, yellow and blue HSV defaults from the provided Contarina reference images.
+- Added **Apply Contarina color presets** in the Web UI.
+
 ## [0.7.0] - 2026-07-08
 
 ### Added

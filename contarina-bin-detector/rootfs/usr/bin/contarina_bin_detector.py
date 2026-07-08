@@ -28,6 +28,20 @@ STATE_NAMES = {
 }
 NONE_STATE = "nessun_bidone"
 UNRELIABLE_STATE = "non_verificabile"
+CONTARINA_COLOR_PRESETS = {
+    "gray": {
+        "lower": [0, 0, 55],
+        "upper": [179, 55, 190],
+    },
+    "yellow": {
+        "lower": [14, 70, 90],
+        "upper": [34, 255, 255],
+    },
+    "blue": {
+        "lower": [92, 55, 50],
+        "upper": [118, 255, 230],
+    },
+}
 LATEST_FRAME: np.ndarray | None = None
 LATEST_FRAME_LOCK = Lock()
 
@@ -44,12 +58,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "timezone": "Europe/Rome",
     "roi": {"x": 100, "y": 100, "width": 300, "height": 250},
-    "gray_hsv_lower": [0, 0, 45],
-    "gray_hsv_upper": [179, 60, 210],
-    "yellow_hsv_lower": [18, 60, 60],
-    "yellow_hsv_upper": [38, 255, 255],
-    "blue_hsv_lower": [90, 50, 40],
-    "blue_hsv_upper": [130, 255, 255],
+    "gray_hsv_lower": CONTARINA_COLOR_PRESETS["gray"]["lower"],
+    "gray_hsv_upper": CONTARINA_COLOR_PRESETS["gray"]["upper"],
+    "yellow_hsv_lower": CONTARINA_COLOR_PRESETS["yellow"]["lower"],
+    "yellow_hsv_upper": CONTARINA_COLOR_PRESETS["yellow"]["upper"],
+    "blue_hsv_lower": CONTARINA_COLOR_PRESETS["blue"]["lower"],
+    "blue_hsv_upper": CONTARINA_COLOR_PRESETS["blue"]["upper"],
     "min_color_ratio": 0.08,
     "min_brightness": 35,
     "min_contrast": 15,
@@ -547,6 +561,9 @@ class WebUiHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/settings"):
             self.send_json(load_settings())
             return
+        if self.path.startswith("/api/color-presets"):
+            self.send_json(CONTARINA_COLOR_PRESETS)
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
@@ -686,6 +703,9 @@ def web_ui_html() -> str:
         <label>Yellow upper HSV <input id="yellow_hsv_upper"></label>
         <label>Blue lower HSV <input id="blue_hsv_lower"></label>
         <label>Blue upper HSV <input id="blue_hsv_upper"></label>
+      </div>
+      <div class="row" style="margin-top: 12px;">
+        <button class="secondary" id="presets" type="button">Apply Contarina color presets</button>
       </div>
     </section>
     <section>
@@ -894,11 +914,25 @@ def web_ui_html() -> str:
       refreshSnapshot();
     }
 
+    async function applyColorPresets() {
+      const response = await fetch("api/color-presets");
+      const presets = await response.json();
+      settings.gray_hsv_lower = presets.gray.lower;
+      settings.gray_hsv_upper = presets.gray.upper;
+      settings.yellow_hsv_lower = presets.yellow.lower;
+      settings.yellow_hsv_upper = presets.yellow.upper;
+      settings.blue_hsv_lower = presets.blue.lower;
+      settings.blue_hsv_upper = presets.blue.upper;
+      renderSettings();
+      setStatus("Contarina color presets applied. Save configuration to keep them.");
+    }
+
     img.addEventListener("load", syncCanvas);
     img.addEventListener("error", () => setStatus("Snapshot unavailable. Check the RTSP URL and save the configuration."));
     window.addEventListener("resize", syncCanvas);
     document.getElementById("refresh").addEventListener("click", refreshSnapshot);
     document.getElementById("save").addEventListener("click", saveSettings);
+    document.getElementById("presets").addEventListener("click", applyColorPresets);
 
     buildDays();
     buildMappingSelects();
