@@ -2,6 +2,13 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.9.0] - 2026-07-08
+
+### Added
+
+- Added **Test notification** in the Web UI for the configured smartphone notify service.
+- Added **Debug overlay** in the Web UI with ROI rectangle, detected state, expected collection, color ratios and image-quality diagnostics.
+
 ## [0.8.0] - 2026-07-08
 
 ### Changed

@@ -44,11 +44,15 @@ When verification is active and the expected bin is not detected, the add-on sen
 
 When the expected bin is detected, the add-on sends a `clear_notification` command with the same tag.
 
+Use **Test notification** in the Web UI to verify the configured `notify.mobile_app_*` service before relying on reminders.
+
 ## Scan Frequency
 
 The detector captures a fresh RTSP frame for each scan, analyzes it, closes the RTSP stream and waits for the next scan. The default interval is 300 seconds, so one scan every 5 minutes.
 
 The **Refresh frame** button in the Web UI also captures a fresh frame on demand.
+
+The **Debug overlay** button captures a fresh frame and draws the ROI plus diagnostic text directly on the snapshot. It is useful for tuning color thresholds, brightness, contrast and sharpness.
 
 ## Expected Collection Sensor
 

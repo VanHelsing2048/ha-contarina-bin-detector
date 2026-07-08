@@ -59,6 +59,8 @@ When the expected bin is missing, the add-on sends a reminder notification. When
 
 If the image cannot be trusted because it is dark, low-contrast or blurry, the add-on can send a dedicated notification instead of a missing-bin reminder.
 
+Use **Test notification** to send an immediate sample notification with the current notify service.
+
 ### Expected Collection Mapping
 
 If another Home Assistant integration exposes the expected collection with states such as `Carta`, `VPL`, `Umido` and `Secco`, enter its entity ID in the Web UI.
@@ -108,6 +110,8 @@ Use **Apply Contarina color presets** in the Web UI if existing saved settings s
 ### ROI
 
 The ROI editor displays an RTSP snapshot and lets you draw the rectangle directly on the image. The saved rectangle uses the original frame pixel coordinates.
+
+Use **Debug overlay** to capture a fresh frame with the ROI, detected state, expected collection, color ratios and image-quality values drawn on the snapshot.
 
 ## Unreliable Verification
 

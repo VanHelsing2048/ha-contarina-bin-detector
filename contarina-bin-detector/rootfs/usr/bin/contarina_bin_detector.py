@@ -423,6 +423,18 @@ def send_mobile_notification(settings: dict[str, Any], title: str, message: str,
     )
 
 
+def send_test_notification(settings: dict[str, Any]) -> None:
+    if not notify_service_parts(settings):
+        raise RuntimeError("Configure the notify service first.")
+    tag = f"{settings.get('notify_tag', 'contarina_bin_reminder')}_test"
+    send_mobile_notification(
+        settings,
+        "Contarina test",
+        "Notifica di prova dal Contarina Bin Detector.",
+        tag,
+    )
+
+
 def clear_mobile_notification(settings: dict[str, Any], tag: str) -> None:
     parts = notify_service_parts(settings)
     if not parts:
@@ -521,6 +533,26 @@ def capture_snapshot(rtsp_url: str) -> bytes:
     return encode_snapshot(frame)
 
 
+def capture_debug_snapshot(settings: dict[str, Any]) -> bytes:
+    rtsp_url = settings["rtsp_url"].strip()
+    if not rtsp_url:
+        raise RuntimeError("Configure the RTSP URL first.")
+
+    frame = capture_fresh_frame(rtsp_url)
+    with LATEST_FRAME_LOCK:
+        global LATEST_FRAME
+        LATEST_FRAME = frame.copy()
+
+    state, candidate_color, _, _, collection, ratios, quality, scheduled = analyze_frame(
+        frame,
+        settings,
+        NONE_STATE,
+        0,
+    )
+    draw_debug_overlay(frame, settings, state, candidate_color, collection, ratios, quality, scheduled)
+    return encode_snapshot(frame)
+
+
 def capture_fresh_frame(rtsp_url: str, discard_frames: int = 5) -> np.ndarray:
     capture = open_stream(rtsp_url)
     try:
@@ -541,6 +573,43 @@ def capture_fresh_frame(rtsp_url: str, discard_frames: int = 5) -> np.ndarray:
         capture.release()
 
 
+def draw_debug_overlay(
+    frame: np.ndarray,
+    settings: dict[str, Any],
+    state: str,
+    candidate_color: str,
+    collection: dict[str, Any],
+    ratios: dict[str, float],
+    quality: dict[str, Any],
+    scheduled: bool,
+) -> None:
+    roi = validate_roi(settings["roi"])
+    height, width = frame.shape[:2]
+    x1 = max(0, min(width - 1, roi["x"]))
+    y1 = max(0, min(height - 1, roi["y"]))
+    x2 = max(x1 + 1, min(width, roi["x"] + roi["width"]))
+    y2 = max(y1 + 1, min(height, roi["y"] + roi["height"]))
+
+    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 215, 255), 3)
+    overlay_lines = [
+        f"state: {state}",
+        f"candidate: {candidate_color}",
+        f"expected: {collection.get('expected_state', '') or '-'} ({collection.get('state', '') or '-'})",
+        f"scheduled: {scheduled}",
+        "ratios: " + ", ".join(f"{color}={ratio:.3f}" for color, ratio in ratios.items()),
+        f"quality: {quality['reason']} b={float(quality['brightness']):.1f} c={float(quality['contrast']):.1f} s={float(quality['sharpness']):.1f}",
+    ]
+
+    line_height = 24
+    box_height = 12 + line_height * len(overlay_lines)
+    box_width = min(width - 20, 820)
+    cv2.rectangle(frame, (10, 10), (10 + box_width, 10 + box_height), (0, 0, 0), -1)
+    cv2.rectangle(frame, (10, 10), (10 + box_width, 10 + box_height), (255, 255, 255), 1)
+    for index, line in enumerate(overlay_lines):
+        y = 35 + index * line_height
+        cv2.putText(frame, line, (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 255, 255), 1, cv2.LINE_AA)
+
+
 def encode_snapshot(frame: np.ndarray) -> bytes:
     ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
     if not ok:
@@ -549,7 +618,7 @@ def encode_snapshot(frame: np.ndarray) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.7"
+    server_version = "ContarinaWebUi/0.9"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
@@ -557,6 +626,9 @@ class WebUiHandler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/snapshot"):
             self.send_snapshot()
+            return
+        if self.path.startswith("/debug-snapshot"):
+            self.send_debug_snapshot()
             return
         if self.path.startswith("/api/settings"):
             self.send_json(load_settings())
@@ -572,6 +644,17 @@ class WebUiHandler(BaseHTTPRequestHandler):
             saved = save_settings(payload)
             self.send_json({"ok": True, "settings": saved})
             log("Saved settings from Web UI")
+            return
+        if self.path.startswith("/api/test-notification"):
+            payload = self.read_json_body()
+            settings = save_settings(payload)
+            try:
+                send_test_notification(settings)
+            except Exception as error:
+                self.send_error(HTTPStatus.BAD_REQUEST, str(error))
+                return
+            self.send_json({"ok": True})
+            log("Sent test notification from Web UI")
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -602,6 +685,20 @@ class WebUiHandler(BaseHTTPRequestHandler):
     def send_snapshot(self) -> None:
         try:
             data = capture_snapshot(load_settings()["rtsp_url"])
+        except Exception as error:
+            self.send_error(HTTPStatus.BAD_GATEWAY, str(error))
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def send_debug_snapshot(self) -> None:
+        try:
+            data = capture_debug_snapshot(load_settings())
         except Exception as error:
             self.send_error(HTTPStatus.BAD_GATEWAY, str(error))
             return
@@ -670,6 +767,9 @@ def web_ui_html() -> str:
         <label>Not reliable message <input id="notify_unreliable_message"></label>
         <label><span><input id="notify_unreliable" type="checkbox"> Notify when verification is not reliable</span></label>
       </div>
+      <div class="row" style="margin-top: 12px;">
+        <button class="secondary" id="test_notification" type="button">Test notification</button>
+      </div>
     </section>
     <section>
       <h2>Expected Collection Mapping</h2>
@@ -712,6 +812,7 @@ def web_ui_html() -> str:
       <div class="row">
         <h2>ROI</h2>
         <button class="secondary" id="refresh" type="button">Refresh frame</button>
+        <button class="secondary" id="debug" type="button">Debug overlay</button>
         <button id="save" type="button">Save configuration</button>
       </div>
       <div class="stage">
@@ -914,6 +1015,20 @@ def web_ui_html() -> str:
       refreshSnapshot();
     }
 
+    async function testNotification() {
+      settings = collectSettings();
+      const response = await fetch("api/test-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings)
+      });
+      if (!response.ok) {
+        setStatus("Test notification failed. Check notify service and logs.");
+        return;
+      }
+      setStatus("Test notification sent.");
+    }
+
     async function applyColorPresets() {
       const response = await fetch("api/color-presets");
       const presets = await response.json();
@@ -931,7 +1046,12 @@ def web_ui_html() -> str:
     img.addEventListener("error", () => setStatus("Snapshot unavailable. Check the RTSP URL and save the configuration."));
     window.addEventListener("resize", syncCanvas);
     document.getElementById("refresh").addEventListener("click", refreshSnapshot);
+    document.getElementById("debug").addEventListener("click", () => {
+      setStatus("Loading debug snapshot...");
+      img.src = `debug-snapshot?t=${Date.now()}`;
+    });
     document.getElementById("save").addEventListener("click", saveSettings);
+    document.getElementById("test_notification").addEventListener("click", testNotification);
     document.getElementById("presets").addEventListener("click", applyColorPresets);
 
     buildDays();

@@ -20,6 +20,8 @@ The add-on reads an RTSP stream, checks a configured pixel area, detects whether
 - Expected collection sensor mapping for `Carta`, `VPL`, `Umido` and `Secco`.
 - Low-light detection to avoid false negatives when the camera cannot see the bin.
 - Mobile app notifications through a configured `notify.mobile_app_*` service.
+- Mobile notification test action from the Web UI.
+- Debug snapshot with ROI overlay, detected state, color ratios and image quality metrics.
 - Ingress Web UI with RTSP snapshot and visual rectangle selection.
 - Day and time scheduling.
 - Home Assistant `sensor` state publishing through the Supervisor Core API.
@@ -47,6 +49,6 @@ This repository uses semantic versioning. Add-on versions are defined in `contar
 
 ## Status
 
-Current release: `0.8.0`.
+Current release: `0.9.0`.
 
 The add-on is marked as experimental until it has been tested against a real RTSP stream and a few lighting conditions.
