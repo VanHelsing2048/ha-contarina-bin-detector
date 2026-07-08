@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -e
+
+exec python3 /usr/bin/contarina_bin_detector.py

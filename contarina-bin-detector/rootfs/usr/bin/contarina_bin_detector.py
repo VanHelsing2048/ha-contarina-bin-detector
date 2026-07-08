@@ -16,6 +16,7 @@ import requests
 
 
 SETTINGS_PATH = "/data/settings.json"
+NOTIFICATION_STATE_PATH = "/data/notification_state.json"
 CORE_API_BASE = "http://supervisor/core/api"
 UI_PORT = 8099
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -26,7 +27,7 @@ STATE_NAMES = {
     "blue": "blu",
 }
 NONE_STATE = "nessun_bidone"
-DARK_STATE = "non_verificabile_buio"
+UNRELIABLE_STATE = "non_verificabile"
 LATEST_FRAME: np.ndarray | None = None
 LATEST_FRAME_LOCK = Lock()
 
@@ -51,11 +52,21 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "blue_hsv_upper": [130, 255, 255],
     "min_color_ratio": 0.08,
     "min_brightness": 35,
+    "min_contrast": 15,
+    "min_sharpness": 20,
     "consecutive_frames": 1,
     "scan_interval": 300,
     "monitor_days": ["mon"],
     "active_time_start": "00:00",
     "active_time_end": "23:59",
+    "notify_enabled": False,
+    "notify_service": "",
+    "notify_tag": "contarina_bin_reminder",
+    "notify_cooldown": 3600,
+    "notify_unreliable": True,
+    "notify_title": "Bidone da esporre",
+    "notify_message": "Bidone {color} da esporre oggi.",
+    "notify_unreliable_message": "Non riesco a verificare il bidone: {reason}.",
 }
 
 
@@ -93,8 +104,13 @@ def save_settings(settings: dict[str, Any]) -> dict[str, Any]:
         merged[f"{color}_hsv_upper"] = validate_hsv(merged[f"{color}_hsv_upper"])
     merged["min_color_ratio"] = max(0.0, min(1.0, float(merged["min_color_ratio"])))
     merged["min_brightness"] = max(0, min(255, int(merged["min_brightness"])))
+    merged["min_contrast"] = max(0, float(merged.get("min_contrast", 15)))
+    merged["min_sharpness"] = max(0, float(merged.get("min_sharpness", 20)))
     merged["consecutive_frames"] = max(1, int(merged["consecutive_frames"]))
     merged["scan_interval"] = max(1, int(merged["scan_interval"]))
+    merged["notify_enabled"] = bool(merged.get("notify_enabled", False))
+    merged["notify_unreliable"] = bool(merged.get("notify_unreliable", True))
+    merged["notify_cooldown"] = max(60, int(merged.get("notify_cooldown", 3600)))
     merged["monitor_days"] = [
         day for day in merged.get("monitor_days", []) if str(day).lower() in WEEKDAYS
     ]
@@ -183,12 +199,39 @@ def color_ratios(frame: np.ndarray, settings: dict[str, Any]) -> dict[str, float
     return ratios
 
 
-def roi_brightness(frame: np.ndarray, settings: dict[str, Any]) -> float:
+def roi_quality(frame: np.ndarray, settings: dict[str, Any]) -> dict[str, Any]:
     region = crop_roi(frame, settings["roi"])
     if region.size == 0:
-        return 0.0
+        return {
+            "brightness": 0.0,
+            "contrast": 0.0,
+            "sharpness": 0.0,
+            "reliable": False,
+            "reason": "roi_non_valida",
+        }
+
     hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
-    return float(np.mean(hsv[:, :, 2]))
+    gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+    brightness = float(np.mean(hsv[:, :, 2]))
+    contrast = float(np.std(gray))
+    sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+
+    if brightness < int(settings["min_brightness"]):
+        reason = "buio"
+    elif contrast < float(settings["min_contrast"]):
+        reason = "contrasto_basso"
+    elif sharpness < float(settings["min_sharpness"]):
+        reason = "immagine_sfocata"
+    else:
+        reason = "ok"
+
+    return {
+        "brightness": brightness,
+        "contrast": contrast,
+        "sharpness": sharpness,
+        "reliable": reason == "ok",
+        "reason": reason,
+    }
 
 
 def configured_color_ranges(settings: dict[str, Any]) -> dict[str, dict[str, list[int]]]:
@@ -228,6 +271,20 @@ def home_assistant_get_state(entity_id: str) -> dict[str, Any] | None:
     return response.json()
 
 
+def home_assistant_call_service(domain: str, service: str, payload: dict[str, Any]) -> None:
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        raise RuntimeError("SUPERVISOR_TOKEN is not available.")
+
+    response = requests.post(
+        f"{CORE_API_BASE}/services/{domain}/{service}",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=10,
+    )
+    response.raise_for_status()
+
+
 def expected_collection(settings: dict[str, Any]) -> dict[str, Any]:
     entity_id = settings.get("collection_sensor_entity", "").strip()
     if not entity_id:
@@ -264,8 +321,7 @@ def publish_state(
     ratios: dict[str, float],
     scheduled: bool,
     collection: dict[str, Any],
-    brightness: float,
-    too_dark: bool,
+    quality: dict[str, Any],
 ) -> None:
     token = os.environ.get("SUPERVISOR_TOKEN")
     if not token:
@@ -282,11 +338,17 @@ def publish_state(
             "expected_match": bool(collection["expected_state"] and state == collection["expected_state"]),
             "verification_active": bool(scheduled and collection["verification_active"]),
             "scheduled_now": scheduled,
-            "brightness": round(brightness, 1),
-            "too_dark": too_dark,
+            "verification_reliable": bool(quality["reliable"]),
+            "visibility_reason": quality["reason"],
+            "brightness": round(float(quality["brightness"]), 1),
+            "contrast": round(float(quality["contrast"]), 1),
+            "sharpness": round(float(quality["sharpness"]), 1),
+            "too_dark": quality["reason"] == "buio",
             "color_ratios": {color: round(ratio, 4) for color, ratio in ratios.items()},
             "min_color_ratio": float(settings["min_color_ratio"]),
             "min_brightness": int(settings["min_brightness"]),
+            "min_contrast": float(settings["min_contrast"]),
+            "min_sharpness": float(settings["min_sharpness"]),
             "roi": settings["roi"],
             "color_ranges": configured_color_ranges(settings),
             "last_scan": datetime.now(ZoneInfo(settings.get("timezone", "Europe/Rome"))).isoformat(),
@@ -299,6 +361,133 @@ def publish_state(
         timeout=10,
     )
     response.raise_for_status()
+
+
+def load_notification_state() -> dict[str, Any]:
+    if not os.path.exists(NOTIFICATION_STATE_PATH):
+        return {}
+    try:
+        with open(NOTIFICATION_STATE_PATH, "r", encoding="utf-8") as state_file:
+            return json.load(state_file)
+    except Exception as error:
+        log(f"Ignoring invalid notification state: {error}")
+        return {}
+
+
+def save_notification_state(state: dict[str, Any]) -> None:
+    os.makedirs(os.path.dirname(NOTIFICATION_STATE_PATH), exist_ok=True)
+    with open(NOTIFICATION_STATE_PATH, "w", encoding="utf-8") as state_file:
+        json.dump(state, state_file, indent=2)
+        state_file.write("\n")
+
+
+def notify_service_parts(settings: dict[str, Any]) -> tuple[str, str] | None:
+    notify_service = settings.get("notify_service", "").strip()
+    if not notify_service:
+        return None
+    if notify_service.startswith("notify."):
+        notify_service = notify_service.split(".", 1)[1]
+    return "notify", notify_service
+
+
+def send_mobile_notification(settings: dict[str, Any], title: str, message: str, tag: str) -> None:
+    parts = notify_service_parts(settings)
+    if not parts:
+        return
+    domain, service = parts
+    home_assistant_call_service(
+        domain,
+        service,
+        {
+            "title": title,
+            "message": message,
+            "data": {
+                "tag": tag,
+                "channel": "Contarina",
+            },
+        },
+    )
+
+
+def clear_mobile_notification(settings: dict[str, Any], tag: str) -> None:
+    parts = notify_service_parts(settings)
+    if not parts:
+        return
+    domain, service = parts
+    home_assistant_call_service(
+        domain,
+        service,
+        {
+            "message": "clear_notification",
+            "data": {"tag": tag},
+        },
+    )
+
+
+def format_notification_template(template: str, collection: dict[str, Any], reason: str = "") -> str:
+    return template.format(
+        color=collection.get("expected_state", ""),
+        collection=collection.get("state", ""),
+        reason=reason,
+    )
+
+
+def manage_mobile_notification(
+    settings: dict[str, Any],
+    state: str,
+    collection: dict[str, Any],
+    scheduled: bool,
+    quality: dict[str, Any],
+) -> None:
+    if not settings.get("notify_enabled", False):
+        return
+    if not scheduled or not collection.get("verification_active"):
+        return
+    if not collection.get("expected_state"):
+        return
+    if not notify_service_parts(settings):
+        return
+
+    tag = settings.get("notify_tag", "contarina_bin_reminder")
+    now = time.time()
+    notification_state = load_notification_state()
+    expected_state = collection.get("expected_state", "")
+    notification_key = f"{collection.get('state', '')}:{expected_state}:{state}"
+
+    if expected_state and state == expected_state:
+        clear_mobile_notification(settings, tag)
+        save_notification_state({"active": False, "last_key": "", "last_sent": now})
+        log("Cleared mobile notification because the expected bin was detected")
+        return
+
+    unreliable = state == UNRELIABLE_STATE
+    if unreliable and not settings.get("notify_unreliable", True):
+        return
+
+    cooldown = max(60, int(settings.get("notify_cooldown", 3600)))
+    if (
+        notification_state.get("active")
+        and notification_state.get("last_key") == notification_key
+        and now - float(notification_state.get("last_sent", 0)) < cooldown
+    ):
+        return
+
+    title = settings.get("notify_title", "Bidone da esporre")
+    if unreliable:
+        message = format_notification_template(
+            settings.get("notify_unreliable_message", "Non riesco a verificare il bidone: {reason}."),
+            collection,
+            str(quality["reason"]).replace("_", " "),
+        )
+    else:
+        message = format_notification_template(
+            settings.get("notify_message", "Bidone {color} da esporre oggi."),
+            collection,
+        )
+
+    send_mobile_notification(settings, title, message, tag)
+    save_notification_state({"active": True, "last_key": notification_key, "last_sent": now})
+    log(f"Sent mobile notification: {message}")
 
 
 def open_stream(rtsp_url: str) -> cv2.VideoCapture:
@@ -346,7 +535,7 @@ def encode_snapshot(frame: np.ndarray) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.5"
+    server_version = "ContarinaWebUi/0.7"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
@@ -423,7 +612,8 @@ def web_ui_html() -> str:
     h2 { font-size: 16px; margin: 0 0 12px; }
     section { border-top: 1px solid #2d3a43; padding: 16px 0; }
     label { display: grid; gap: 6px; color: #c9d4da; font-size: 13px; }
-    input { box-sizing: border-box; width: 100%; border: 1px solid #3d4d58; border-radius: 6px; padding: 9px 10px; background: #172027; color: #eef2f4; }
+    input, select { box-sizing: border-box; width: 100%; border: 1px solid #3d4d58; border-radius: 6px; padding: 9px 10px; background: #172027; color: #eef2f4; }
+    input[type="checkbox"] { width: auto; }
     button { border: 0; border-radius: 6px; padding: 9px 12px; background: #46a758; color: white; font-weight: 650; cursor: pointer; }
     button.secondary { background: #40515f; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
@@ -452,6 +642,19 @@ def web_ui_html() -> str:
       </div>
     </section>
     <section>
+      <h2>Mobile Notifications</h2>
+      <div class="grid">
+        <label><span><input id="notify_enabled" type="checkbox"> Enable smartphone notification</span></label>
+        <label>Notify service <input id="notify_service" placeholder="notify.mobile_app_phone"></label>
+        <label>Notification tag <input id="notify_tag"></label>
+        <label>Cooldown seconds <input id="notify_cooldown" type="number" min="60"></label>
+        <label>Title <input id="notify_title"></label>
+        <label>Reminder message <input id="notify_message"></label>
+        <label>Not reliable message <input id="notify_unreliable_message"></label>
+        <label><span><input id="notify_unreliable" type="checkbox"> Notify when verification is not reliable</span></label>
+      </div>
+    </section>
+    <section>
       <h2>Expected Collection Mapping</h2>
       <div class="grid">
         <label>Carta color <select id="map_Carta"></select></label>
@@ -468,6 +671,8 @@ def web_ui_html() -> str:
         <label>Scan interval seconds <input id="scan_interval" type="number" min="1"></label>
         <label>Stable frames <input id="consecutive_frames" type="number" min="1"></label>
         <label>Minimum brightness <input id="min_brightness" type="number" min="0" max="255"></label>
+        <label>Minimum contrast <input id="min_contrast" type="number" min="0" step="0.1"></label>
+        <label>Minimum sharpness <input id="min_sharpness" type="number" min="0" step="0.1"></label>
       </div>
       <div class="days" id="monitor_days"></div>
     </section>
@@ -500,7 +705,9 @@ def web_ui_html() -> str:
     const fields = [
       "rtsp_url", "entity_id", "device_name", "timezone", "active_time_start",
       "active_time_end", "scan_interval", "consecutive_frames", "min_color_ratio",
-      "min_brightness", "collection_sensor_entity",
+      "min_brightness", "min_contrast", "min_sharpness", "collection_sensor_entity",
+      "notify_service", "notify_tag", "notify_cooldown", "notify_title",
+      "notify_message", "notify_unreliable_message",
       "gray_hsv_lower", "gray_hsv_upper", "yellow_hsv_lower", "yellow_hsv_upper",
       "blue_hsv_lower", "blue_hsv_upper"
     ];
@@ -563,6 +770,8 @@ def web_ui_html() -> str:
       document.querySelectorAll("#monitor_days input").forEach((input) => {
         input.checked = settings.monitor_days.includes(input.value);
       });
+      document.getElementById("notify_enabled").checked = Boolean(settings.notify_enabled);
+      document.getElementById("notify_unreliable").checked = Boolean(settings.notify_unreliable);
       collectionLabels.forEach((label) => {
         document.getElementById(`map_${label}`).value = settings.collection_mapping[label];
       });
@@ -575,15 +784,17 @@ def web_ui_html() -> str:
         const input = document.getElementById(field);
         if (field.endsWith("_hsv_lower") || field.endsWith("_hsv_upper")) {
           next[field] = textToHsv(input.value);
-        } else if (["scan_interval", "consecutive_frames", "min_brightness"].includes(field)) {
+        } else if (["scan_interval", "consecutive_frames", "min_brightness", "notify_cooldown"].includes(field)) {
           next[field] = Number(input.value);
-        } else if (field === "min_color_ratio") {
+        } else if (["min_color_ratio", "min_contrast", "min_sharpness"].includes(field)) {
           next[field] = Number(input.value);
         } else {
           next[field] = input.value;
         }
       });
       next.monitor_days = Array.from(document.querySelectorAll("#monitor_days input:checked")).map((input) => input.value);
+      next.notify_enabled = document.getElementById("notify_enabled").checked;
+      next.notify_unreliable = document.getElementById("notify_unreliable").checked;
       next.collection_mapping = {};
       collectionLabels.forEach((label) => {
         next.collection_mapping[label] = document.getElementById(`map_${label}`).value;
@@ -709,11 +920,11 @@ def analyze_frame(
     settings: dict[str, Any],
     current_candidate: str,
     hits: int,
-) -> tuple[str, str, int, dict[str, Any], dict[str, float], float, bool, bool]:
+) -> tuple[str, str, str, int, dict[str, Any], dict[str, float], dict[str, Any], bool]:
     min_ratio = float(settings.get("min_color_ratio", 0.08))
     required_frames = max(1, int(settings.get("consecutive_frames", 1)))
     ratios = color_ratios(frame, settings)
-    brightness = roi_brightness(frame, settings)
+    quality = roi_quality(frame, settings)
     collection = expected_collection(settings)
     candidate_color = detected_color(ratios, min_ratio)
 
@@ -726,15 +937,15 @@ def analyze_frame(
     stable_color = candidate_color if hits >= required_frames else NONE_STATE
     scheduled = is_scheduled_now(settings)
     verification_active = scheduled and collection["verification_active"]
-    too_dark = verification_active and brightness < int(settings["min_brightness"])
-    if too_dark:
-        state = DARK_STATE
+    unreliable = verification_active and not bool(quality["reliable"])
+    if unreliable:
+        state = UNRELIABLE_STATE
     elif verification_active:
         state = stable_color
     else:
         state = NONE_STATE
 
-    return state, current_candidate, hits, collection, ratios, brightness, scheduled, too_dark
+    return state, candidate_color, current_candidate, hits, collection, ratios, quality, scheduled
 
 
 def main() -> int:
@@ -768,7 +979,7 @@ def main() -> int:
         with LATEST_FRAME_LOCK:
             LATEST_FRAME = frame.copy()
 
-        state, current_candidate, hits, collection, ratios, brightness, scheduled, too_dark = analyze_frame(
+        state, candidate_color, current_candidate, hits, collection, ratios, quality, scheduled = analyze_frame(
             frame,
             settings,
             current_candidate,
@@ -780,14 +991,19 @@ def main() -> int:
             collection["state"],
             collection["expected_state"],
             scheduled,
-            too_dark,
+            quality["reason"],
         )
         if publish_signature != last_publish_signature:
-            publish_state(settings, state, candidate_color, ratios, scheduled, collection, brightness, too_dark)
+            publish_state(settings, state, candidate_color, ratios, scheduled, collection, quality)
             last_publish_signature = publish_signature
             log(f"Published {settings['entity_id']}={state} ratios={ratios} scheduled={scheduled} collection={collection}")
         else:
             log(f"Scanned candidate={candidate_color} state={state} ratios={ratios} scheduled={scheduled} collection={collection}")
+
+        try:
+            manage_mobile_notification(settings, state, collection, scheduled, quality)
+        except Exception as error:
+            log(f"Could not manage mobile notification: {error}")
 
         time.sleep(interval)
 

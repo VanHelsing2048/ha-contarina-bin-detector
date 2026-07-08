@@ -4,6 +4,20 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.7.0] - 2026-07-08
+
+### Added
+
+- Added mobile app notification settings in the Web UI.
+- Added reminder notifications when the expected bin is not detected.
+- Added automatic notification clearing when the expected bin is detected.
+- Added unreliable-verification notifications for dark, low-contrast or blurry images.
+- Added add-on icon.
+
+### Fixed
+
+- Changed container startup to use `run.sh`, matching the Home Assistant base image startup pattern.
+
 ## [0.6.0] - 2026-07-08
 
 ### Changed

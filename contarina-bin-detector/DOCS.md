@@ -43,6 +43,22 @@ Configure:
 - Timezone.
 - Collection sensor entity.
 
+### Mobile Notifications
+
+Configure:
+
+- enable smartphone notifications;
+- Home Assistant notify service, for example `notify.mobile_app_iphone`;
+- notification tag;
+- cooldown;
+- title;
+- reminder message;
+- unreliable-verification message.
+
+When the expected bin is missing, the add-on sends a reminder notification. When the expected bin is detected, it sends a `clear_notification` command with the same tag.
+
+If the image cannot be trusted because it is dark, low-contrast or blurry, the add-on can send a dedicated notification instead of a missing-bin reminder.
+
 ### Expected Collection Mapping
 
 If another Home Assistant integration exposes the expected collection with states such as `Carta`, `VPL`, `Umido` and `Secco`, enter its entity ID in the Web UI.
@@ -65,6 +81,8 @@ Configure:
 - scan interval;
 - stable frame count;
 - minimum brightness;
+- minimum contrast;
+- minimum sharpness;
 - allowed weekdays.
 
 If the schedule does not match the current time, the sensor reports `nessun_bidone`.
@@ -83,23 +101,27 @@ OpenCV HSV uses hue from 0 to 179 and saturation/value from 0 to 255.
 
 The ROI editor displays an RTSP snapshot and lets you draw the rectangle directly on the image. The saved rectangle uses the original frame pixel coordinates.
 
-## Night Handling
+## Unreliable Verification
 
-Color detection is not reliable if the camera cannot see the bin. The add-on measures ROI brightness using the HSV value channel.
+Color detection is not reliable if the camera cannot see the bin clearly. The add-on measures:
 
-When verification is active and brightness is below the configured minimum, the sensor state is:
+- brightness;
+- contrast;
+- sharpness.
+
+When verification is active and one of these metrics is below the configured threshold, the sensor state is:
 
 ```text
-non_verificabile_buio
+non_verificabile
 ```
 
-This separates "no bin detected" from "the image is too dark to trust". In practice, the best fixes are camera night mode, a small light near the bin area, or tuning the minimum brightness value using real night snapshots.
+This separates "no bin detected" from "the image is not reliable enough to trust". In practice, the best fixes are camera night mode, a small light near the bin area, cleaning/protecting the lens, or tuning the thresholds using real snapshots.
 
 ## Output
 
 The configured entity is updated with:
 
-- `state`: `grigio`, `giallo`, `blu`, `nessun_bidone` or `non_verificabile_buio`.
+- `state`: `grigio`, `giallo`, `blu`, `nessun_bidone` or `non_verificabile`.
 - `detected`: whether the published state is a bin color.
 - `candidate_color`: the strongest color candidate in the current scan.
 - `expected_collection`: state read from the configured collection sensor.
@@ -108,9 +130,16 @@ The configured entity is updated with:
 - `verification_active`: whether schedule and expected collection allow verification.
 - `scheduled_now`: whether today and the current time are inside the configured schedule.
 - `brightness`: average ROI brightness.
+- `contrast`: ROI contrast.
+- `sharpness`: ROI sharpness.
+- `visibility_reason`: `ok`, `buio`, `contrasto_basso`, `immagine_sfocata` or `roi_non_valida`.
+- `verification_reliable`: whether the image quality is good enough for verification.
 - `too_dark`: whether the current frame is below the configured brightness threshold.
 - `color_ratios`: matching-pixel ratio for gray, yellow and blue.
 - `min_color_ratio`: configured threshold.
+- `min_brightness`: configured brightness threshold.
+- `min_contrast`: configured contrast threshold.
+- `min_sharpness`: configured sharpness threshold.
 - `roi`: configured ROI.
 - `color_ranges`: configured HSV ranges.
 - `last_scan`: timestamp of the last published state change.

@@ -10,7 +10,7 @@ The sensor state is one of:
 - `giallo`
 - `blu`
 - `nessun_bidone`
-- `non_verificabile_buio`
+- `non_verificabile`
 
 ## Graphical Configuration
 
@@ -21,6 +21,18 @@ The sensor state is one of:
 5. Click **Save configuration**.
 
 The Web UI saves settings to `/data/settings.json`. The detector reloads them while running, so most changes do not require restarting the add-on.
+
+## Smartphone Notifications
+
+Enable notifications in the Web UI and set the Home Assistant mobile notify service, for example:
+
+```text
+notify.mobile_app_iphone
+```
+
+When verification is active and the expected bin is not detected, the add-on sends a reminder such as `Bidone giallo da esporre oggi`. It uses a stable notification tag and cooldown to avoid repeated notifications.
+
+When the expected bin is detected, the add-on sends a `clear_notification` command with the same tag.
 
 ## Scan Frequency
 
@@ -41,15 +53,17 @@ The Web UI lets you map each value to the expected bin color. Defaults:
 
 The output sensor keeps reporting the detected color, and adds attributes such as `expected_collection`, `expected_color` and `expected_match`.
 
-## Night Handling
+## Unreliable Verification
 
-When the ROI brightness is below the configured minimum brightness, the sensor reports `non_verificabile_buio`. This is intentional: at night a dark frame should not be treated as a reliable `nessun_bidone`.
+When the ROI is too dark, too flat/low-contrast or too blurry, the sensor reports `non_verificabile`. This is intentional: an unreadable frame should not be treated as a reliable `nessun_bidone`.
+
+The Web UI exposes thresholds for minimum brightness, contrast and sharpness.
 
 Best practical options:
 
 - use the camera IR/night mode if the bin color remains distinguishable;
 - add a small light or motion-triggered illumination near the ROI;
-- tune **Minimum brightness** from the Web UI after checking real night frames.
+- tune brightness, contrast and sharpness from the Web UI after checking real night frames.
 
 ## Visual ROI Editor
 

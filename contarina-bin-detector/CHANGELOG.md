@@ -2,6 +2,20 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.7.0] - 2026-07-08
+
+### Added
+
+- Added smartphone notifications through a configured Home Assistant notify service.
+- Added notification cooldown and stable tag-based notification replacement.
+- Added automatic mobile notification clearing when the expected bin is detected.
+- Added unreliable-verification notifications for dark, low-contrast or blurry images.
+- Added add-on icon.
+
+### Fixed
+
+- Fixed startup by using a `run.sh` command instead of launching Python directly.
+
 ## [0.6.0] - 2026-07-08
 
 ### Changed

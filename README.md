@@ -18,6 +18,7 @@ The add-on reads an RTSP stream, checks a configured pixel area, detects whether
 - HSV color detection for gray, yellow and blue bins.
 - Expected collection sensor mapping for `Carta`, `VPL`, `Umido` and `Secco`.
 - Low-light detection to avoid false negatives when the camera cannot see the bin.
+- Mobile app notifications through a configured `notify.mobile_app_*` service.
 - Ingress Web UI with RTSP snapshot and visual rectangle selection.
 - Day and time scheduling.
 - Home Assistant `sensor` state publishing through the Supervisor Core API.
@@ -45,6 +46,6 @@ This repository uses semantic versioning. Add-on versions are defined in `contar
 
 ## Status
 
-Current release: `0.6.0`.
+Current release: `0.7.0`.
 
 The add-on is marked as experimental until it has been tested against a real RTSP stream and a few lighting conditions.
