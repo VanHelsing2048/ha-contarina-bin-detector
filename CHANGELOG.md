@@ -4,6 +4,15 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.2.0] - 2026-07-08
+
+### Changed
+
+- Changed the Home Assistant entity from a binary sensor to a text sensor.
+- The sensor state is now `grigio`, `giallo`, `blu` or `nessun_bidone`.
+- Added separate HSV bounds for gray, yellow and blue bin detection.
+- Added per-color ratio attributes to simplify tuning.
+
 ## [0.1.0] - 2026-07-08
 
 ### Added

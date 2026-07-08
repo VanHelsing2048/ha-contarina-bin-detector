@@ -1,14 +1,21 @@
 # Contarina Bin Detector Documentation
 
-This add-on detects a configured color in a specific pixel area of an RTSP camera stream and exposes the result as a Home Assistant `binary_sensor`.
+This add-on detects whether a gray, yellow or blue Contarina bin is visible in a specific pixel area of an RTSP camera stream.
 
-It is intended for checking whether a Contarina bin is visible in the expected position on the correct collection day.
+It exposes the result as a Home Assistant `sensor` whose state is:
+
+- `grigio`
+- `giallo`
+- `blu`
+- `nessun_bidone`
+
+If the current day or time is outside the configured schedule, the state is `nessun_bidone` even if a matching color is visible.
 
 ## Configuration
 
 ```yaml
 rtsp_url: rtsp://user:password@192.168.1.50:554/stream1
-entity_id: binary_sensor.contarina_bidone_esposto
+entity_id: sensor.contarina_bidone_esposto
 device_name: Bidone Contarina
 timezone: Europe/Rome
 roi:
@@ -16,9 +23,12 @@ roi:
   y: 420
   width: 260
   height: 210
-color_name: verde
-hsv_lower: [35, 45, 35]
-hsv_upper: [95, 255, 255]
+gray_hsv_lower: [0, 0, 45]
+gray_hsv_upper: [179, 60, 210]
+yellow_hsv_lower: [18, 60, 60]
+yellow_hsv_upper: [38, 255, 255]
+blue_hsv_lower: [90, 50, 40]
+blue_hsv_upper: [130, 255, 255]
 min_color_ratio: 0.08
 consecutive_frames: 3
 scan_interval: 10
@@ -36,10 +46,10 @@ RTSP stream URL for the camera.
 
 ### `entity_id`
 
-Entity ID updated by the add-on. Use a `binary_sensor.*` entity, for example:
+Entity ID updated by the add-on. Use a `sensor.*` entity, for example:
 
 ```yaml
-binary_sensor.contarina_bidone_esposto
+sensor.contarina_bidone_esposto
 ```
 
 ### `device_name`
@@ -61,43 +71,23 @@ Pixel area to monitor:
 
 The ROI should be as small as possible while still covering the expected bin position.
 
-### `color_name`, `hsv_lower` and `hsv_upper`
+### HSV color options
 
-HSV color range for the target bin color. A pixel is considered matching if it is inside the configured range.
+Each supported color has lower and upper HSV bounds:
 
-Starting values:
+- `gray_hsv_lower`, `gray_hsv_upper`
+- `yellow_hsv_lower`, `yellow_hsv_upper`
+- `blue_hsv_lower`, `blue_hsv_upper`
 
-```yaml
-# green
-color_name: verde
-hsv_lower: [35, 45, 35]
-hsv_upper: [95, 255, 255]
-
-# blue
-color_name: blu
-hsv_lower: [90, 50, 40]
-hsv_upper: [130, 255, 255]
-
-# yellow
-color_name: giallo
-hsv_lower: [18, 60, 60]
-hsv_upper: [38, 255, 255]
-
-# brown / dark orange
-color_name: marrone
-hsv_lower: [5, 50, 30]
-hsv_upper: [25, 255, 180]
-```
+OpenCV HSV uses hue from 0 to 179 and saturation/value from 0 to 255.
 
 ### `min_color_ratio`
 
-Minimum matching-pixel ratio inside the ROI. Example: `0.08` means 8 percent of the ROI must match the configured color.
-
-Lower it if the bin is detected visually but the sensor remains off. Raise it if unrelated objects trigger the sensor.
+Minimum matching-pixel ratio inside the ROI. Example: `0.08` means 8 percent of the ROI must match a color before it can become the sensor state.
 
 ### `consecutive_frames`
 
-Number of consecutive positive frames required before the add-on reports detection.
+Number of consecutive frames where the same color must be detected before the state changes.
 
 ### `scan_interval`
 
@@ -105,7 +95,7 @@ Seconds between scans.
 
 ### `monitor_days`
 
-Days where detection is allowed to turn the sensor on.
+Days where detection is allowed to report a bin color.
 
 Accepted values:
 
@@ -126,18 +116,20 @@ active_time_end: "08:00"
 
 The configured entity is updated with:
 
-- `state`: `on` or `off`.
-- `detected`: whether the color threshold is currently met.
+- `state`: `grigio`, `giallo`, `blu` or `nessun_bidone`.
+- `detected`: whether the published state is a bin color.
+- `candidate_color`: the strongest color candidate in the current scan.
 - `scheduled_now`: whether today and the current time are inside the configured schedule.
-- `color_ratio`: matching-pixel ratio in the ROI.
+- `color_ratios`: matching-pixel ratio for gray, yellow and blue.
+- `min_color_ratio`: configured threshold.
 - `roi`: configured ROI.
-- `hsv_ranges`: effective color ranges used by the detector.
+- `color_ranges`: configured HSV ranges.
 - `last_scan`: timestamp of the last published state change.
 
 ## Tuning Workflow
 
 1. Start with a tight ROI around the expected bin position.
-2. Use the default HSV range for the bin color.
-3. Watch `color_ratio` while the bin is visible.
-4. Set `min_color_ratio` slightly below the visible-bin value.
+2. Put one bin in view and check the `color_ratios` attribute.
+3. Repeat for gray, yellow and blue.
+4. Set `min_color_ratio` slightly below the expected visible-bin values.
 5. Check a few lighting conditions before relying on the automation.

@@ -15,6 +15,13 @@ import requests
 OPTIONS_PATH = "/data/options.json"
 CORE_API_BASE = "http://supervisor/core/api"
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+COLORS = ("gray", "yellow", "blue")
+STATE_NAMES = {
+    "gray": "grigio",
+    "yellow": "giallo",
+    "blue": "blu",
+}
+NONE_STATE = "nessun_bidone"
 
 
 def log(message: str) -> None:
@@ -62,51 +69,61 @@ def crop_roi(frame: np.ndarray, roi: dict[str, int]) -> np.ndarray:
     return frame[y1:y2, x1:x2]
 
 
-def color_ratio(frame: np.ndarray, options: dict[str, Any]) -> float:
+def color_ratios(frame: np.ndarray, options: dict[str, Any]) -> dict[str, float]:
     region = crop_roi(frame, options["roi"])
     if region.size == 0:
-        return 0.0
+        return {color: 0.0 for color in COLORS}
 
     hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
-    combined_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
-
-    for hsv_range in configured_hsv_ranges(options):
+    ratios = {}
+    for color, hsv_range in configured_color_ranges(options).items():
         lower = np.array(hsv_range["lower"], dtype=np.uint8)
         upper = np.array(hsv_range["upper"], dtype=np.uint8)
         mask = cv2.inRange(hsv, lower, upper)
-        combined_mask = cv2.bitwise_or(combined_mask, mask)
+        ratios[color] = float(cv2.countNonZero(mask)) / float(mask.size)
+    return ratios
 
-    return float(cv2.countNonZero(combined_mask)) / float(combined_mask.size)
 
-
-def configured_hsv_ranges(options: dict[str, Any]) -> list[dict[str, Any]]:
-    if "hsv_ranges" in options:
-        return options["hsv_ranges"]
-    return [
-        {
-            "name": options.get("color_name", "target"),
-            "lower": options["hsv_lower"],
-            "upper": options["hsv_upper"],
+def configured_color_ranges(options: dict[str, Any]) -> dict[str, dict[str, list[int]]]:
+    return {
+        color: {
+            "lower": options[f"{color}_hsv_lower"],
+            "upper": options[f"{color}_hsv_upper"],
         }
-    ]
+        for color in COLORS
+    }
 
 
-def publish_state(options: dict[str, Any], state: bool, ratio: float, scheduled: bool) -> None:
+def detected_color(ratios: dict[str, float], min_ratio: float) -> str:
+    color = max(ratios, key=ratios.get)
+    if ratios[color] >= min_ratio:
+        return STATE_NAMES[color]
+    return NONE_STATE
+
+
+def publish_state(
+    options: dict[str, Any],
+    state: str,
+    candidate_color: str,
+    ratios: dict[str, float],
+    scheduled: bool,
+) -> None:
     token = os.environ.get("SUPERVISOR_TOKEN")
     if not token:
         raise RuntimeError("SUPERVISOR_TOKEN is not available; enable homeassistant_api in config.yaml.")
 
     entity_id = options["entity_id"]
     payload = {
-        "state": "on" if state else "off",
+        "state": state,
         "attributes": {
             "friendly_name": options.get("device_name", "Bidone Contarina"),
-            "device_class": "presence",
-            "detected": ratio >= float(options["min_color_ratio"]),
+            "detected": state != NONE_STATE,
+            "candidate_color": candidate_color,
             "scheduled_now": scheduled,
-            "color_ratio": round(ratio, 4),
+            "color_ratios": {color: round(ratio, 4) for color, ratio in ratios.items()},
+            "min_color_ratio": float(options["min_color_ratio"]),
             "roi": options["roi"],
-            "hsv_ranges": configured_hsv_ranges(options),
+            "color_ranges": configured_color_ranges(options),
             "last_scan": datetime.now(ZoneInfo(options.get("timezone", "Europe/Rome"))).isoformat(),
         },
     }
@@ -131,8 +148,9 @@ def main() -> int:
     interval = max(1, int(options.get("scan_interval", 10)))
     required_frames = max(1, int(options.get("consecutive_frames", 3)))
     min_ratio = float(options.get("min_color_ratio", 0.08))
+    current_candidate = NONE_STATE
     hits = 0
-    last_state: bool | None = None
+    last_state: str | None = None
 
     log("Starting Contarina bin detector")
     capture = open_stream(rtsp_url)
@@ -153,19 +171,24 @@ def main() -> int:
             capture = open_stream(rtsp_url)
             continue
 
-        ratio = color_ratio(frame, options)
-        detected_this_frame = ratio >= min_ratio
-        hits = hits + 1 if detected_this_frame else 0
-        detected = hits >= required_frames
+        ratios = color_ratios(frame, options)
+        candidate_color = detected_color(ratios, min_ratio)
+        if candidate_color != NONE_STATE and candidate_color == current_candidate:
+            hits += 1
+        else:
+            current_candidate = candidate_color
+            hits = 1 if candidate_color != NONE_STATE else 0
+
+        stable_color = candidate_color if hits >= required_frames else NONE_STATE
         scheduled = is_scheduled_now(options)
-        state = detected and scheduled
+        state = stable_color if scheduled else NONE_STATE
 
         if state != last_state:
-            publish_state(options, state, ratio, scheduled)
+            publish_state(options, state, candidate_color, ratios, scheduled)
             last_state = state
-            log(f"Published {options['entity_id']}={state} ratio={ratio:.4f} scheduled={scheduled}")
+            log(f"Published {options['entity_id']}={state} ratios={ratios} scheduled={scheduled}")
         else:
-            log(f"Scanned ratio={ratio:.4f} detected={detected} scheduled={scheduled}")
+            log(f"Scanned candidate={candidate_color} state={state} ratios={ratios} scheduled={scheduled}")
 
         time.sleep(interval)
 

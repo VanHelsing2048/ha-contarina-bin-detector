@@ -2,6 +2,15 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.2.0] - 2026-07-08
+
+### Changed
+
+- Changed the output entity from `binary_sensor` style states to a text `sensor`.
+- The sensor state now reports `grigio`, `giallo`, `blu` or `nessun_bidone`.
+- Added HSV configuration for the three supported bin colors.
+- Added per-color ratio diagnostics in the sensor attributes.
+
 ## [0.1.0] - 2026-07-08
 
 ### Added

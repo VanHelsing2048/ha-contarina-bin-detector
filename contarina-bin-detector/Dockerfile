@@ -5,7 +5,7 @@ ARG BUILD_VERSION
 
 LABEL \
     io.hass.name="Contarina Bin Detector" \
-    io.hass.description="Detects a Contarina bin in an RTSP camera area and publishes a Home Assistant binary sensor" \
+    io.hass.description="Detects which Contarina bin color is visible in an RTSP camera area and publishes a Home Assistant sensor" \
     io.hass.version="${BUILD_VERSION}" \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}"
