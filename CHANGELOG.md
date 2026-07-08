@@ -4,6 +4,15 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.3.0] - 2026-07-08
+
+### Added
+
+- Added Home Assistant Ingress panel for visual ROI selection.
+- Added RTSP snapshot preview in the add-on UI.
+- Added rectangle drawing and persistent ROI saving to `/data/roi.json`.
+- The detector now reloads the saved ROI while running.
+
 ## [0.2.0] - 2026-07-08
 
 ### Changed

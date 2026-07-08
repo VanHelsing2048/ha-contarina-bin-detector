@@ -2,6 +2,14 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.3.0] - 2026-07-08
+
+### Added
+
+- Added an Ingress UI to define the ROI visually from an RTSP snapshot.
+- Added persistent ROI override saved from the UI.
+- Added live detector reload of the saved ROI.
+
 ## [0.2.0] - 2026-07-08
 
 ### Changed

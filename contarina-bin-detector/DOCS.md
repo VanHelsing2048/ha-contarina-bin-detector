@@ -11,6 +11,19 @@ It exposes the result as a Home Assistant `sensor` whose state is:
 
 If the current day or time is outside the configured schedule, the state is `nessun_bidone` even if a matching color is visible.
 
+## Visual ROI Editor
+
+The add-on exposes an Ingress UI in Home Assistant. It shows a snapshot from the configured RTSP stream and lets you draw the ROI directly on the image.
+
+Workflow:
+
+1. Open the add-on page in Home Assistant.
+2. Select **Open Web UI**.
+3. Draw the rectangle over the area where the bin should appear.
+4. Click **Save ROI**.
+
+The saved rectangle is written to `/data/roi.json`. When this file exists, it overrides the `roi` values from the add-on options. The detector reloads this saved ROI while it is running.
+
 ## Configuration
 
 ```yaml
@@ -70,6 +83,8 @@ Pixel area to monitor:
 - `height`: ROI height.
 
 The ROI should be as small as possible while still covering the expected bin position.
+
+The visual ROI editor is recommended because it stores the rectangle using the real RTSP frame pixel coordinates.
 
 ### HSV color options
 

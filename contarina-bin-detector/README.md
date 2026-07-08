@@ -16,6 +16,18 @@ The state is a bin color only when:
 - detection remains stable for `consecutive_frames`;
 - the current day and time match `monitor_days`, `active_time_start` and `active_time_end`.
 
+## Visual ROI Editor
+
+The add-on includes a Home Assistant Ingress UI.
+
+1. Open the add-on page.
+2. Use **Open Web UI**.
+3. Click **Refresh frame** if you need a new RTSP snapshot.
+4. Draw a rectangle over the area where the bin appears.
+5. Click **Save ROI**.
+
+The saved ROI is stored in `/data/roi.json` and overrides the `roi` value from the add-on options. The detector reloads it while running, so a restart is not required after saving the rectangle.
+
 ## Configuration
 
 Example:
@@ -49,6 +61,8 @@ active_time_end: "08:00"
 
 - `x`, `y`: top-left corner;
 - `width`, `height`: monitored area size.
+
+You can either edit `roi` manually or use the visual ROI editor from the add-on Web UI.
 
 `monitor_days` accepts `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, `sun`. If the list is empty, every day is allowed.
 
