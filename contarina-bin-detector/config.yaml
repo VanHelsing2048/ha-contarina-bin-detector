@@ -1,0 +1,62 @@
+name: Contarina Bin Detector
+version: "0.1.0"
+slug: contarina_bin_detector
+description: Detects a Contarina bin color inside a configured RTSP camera area and publishes a Home Assistant binary sensor.
+url: "https://github.com/VanHelsing2048/ha-contarina-bin-detector/tree/main/contarina-bin-detector"
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+startup: services
+boot: auto
+homeassistant_api: true
+video: true
+stage: experimental
+options:
+  rtsp_url: "rtsp://user:password@camera.local:554/stream1"
+  entity_id: "binary_sensor.contarina_bidone_esposto"
+  device_name: "Bidone Contarina"
+  timezone: "Europe/Rome"
+  roi:
+    x: 100
+    y: 100
+    width: 300
+    height: 250
+  color_name: "green"
+  hsv_lower: [35, 45, 35]
+  hsv_upper: [95, 255, 255]
+  min_color_ratio: 0.08
+  consecutive_frames: 3
+  scan_interval: 10
+  monitor_days:
+    - "mon"
+  active_time_start: "00:00"
+  active_time_end: "23:59"
+schema:
+  rtsp_url: str
+  entity_id: str
+  device_name: str
+  timezone: str
+  roi:
+    x: int
+    y: int
+    width: int
+    height: int
+  color_name: str
+  hsv_lower:
+    - int
+    - int
+    - int
+  hsv_upper:
+    - int
+    - int
+    - int
+  min_color_ratio: float
+  consecutive_frames: int
+  scan_interval: int
+  monitor_days:
+    - str
+  active_time_start: str
+  active_time_end: str
