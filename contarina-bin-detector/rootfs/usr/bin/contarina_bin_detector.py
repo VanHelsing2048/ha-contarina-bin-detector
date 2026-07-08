@@ -26,6 +26,7 @@ STATE_NAMES = {
     "blue": "blu",
 }
 NONE_STATE = "nessun_bidone"
+DARK_STATE = "non_verificabile_buio"
 LATEST_FRAME: np.ndarray | None = None
 LATEST_FRAME_LOCK = Lock()
 
@@ -33,6 +34,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "rtsp_url": "",
     "entity_id": "sensor.contarina_bidone_esposto",
     "device_name": "Bidone Contarina",
+    "collection_sensor_entity": "",
+    "collection_mapping": {
+        "Carta": "yellow",
+        "VPL": "blue",
+        "Umido": "gray",
+        "Secco": "gray",
+    },
     "timezone": "Europe/Rome",
     "roi": {"x": 100, "y": 100, "width": 300, "height": 250},
     "gray_hsv_lower": [0, 0, 45],
@@ -42,6 +50,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "blue_hsv_lower": [90, 50, 40],
     "blue_hsv_upper": [130, 255, 255],
     "min_color_ratio": 0.08,
+    "min_brightness": 35,
     "consecutive_frames": 3,
     "scan_interval": 10,
     "monitor_days": ["mon"],
@@ -71,6 +80,7 @@ def load_settings() -> dict[str, Any]:
     settings["monitor_days"] = [
         day for day in settings.get("monitor_days", []) if str(day).lower() in WEEKDAYS
     ]
+    settings["collection_mapping"] = validate_collection_mapping(settings.get("collection_mapping", {}))
     return settings
 
 
@@ -82,11 +92,13 @@ def save_settings(settings: dict[str, Any]) -> dict[str, Any]:
         merged[f"{color}_hsv_lower"] = validate_hsv(merged[f"{color}_hsv_lower"])
         merged[f"{color}_hsv_upper"] = validate_hsv(merged[f"{color}_hsv_upper"])
     merged["min_color_ratio"] = max(0.0, min(1.0, float(merged["min_color_ratio"])))
+    merged["min_brightness"] = max(0, min(255, int(merged["min_brightness"])))
     merged["consecutive_frames"] = max(1, int(merged["consecutive_frames"]))
     merged["scan_interval"] = max(1, int(merged["scan_interval"]))
     merged["monitor_days"] = [
         day for day in merged.get("monitor_days", []) if str(day).lower() in WEEKDAYS
     ]
+    merged["collection_mapping"] = validate_collection_mapping(merged.get("collection_mapping", {}))
 
     os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
     with open(SETTINGS_PATH, "w", encoding="utf-8") as settings_file:
@@ -109,6 +121,15 @@ def validate_hsv(value: list[Any]) -> list[int]:
     saturation = max(0, min(255, int(value[1])))
     brightness = max(0, min(255, int(value[2])))
     return [hue, saturation, brightness]
+
+
+def validate_collection_mapping(mapping: dict[str, Any]) -> dict[str, str]:
+    defaults = DEFAULT_SETTINGS["collection_mapping"]
+    validated = {}
+    for label, default_color in defaults.items():
+        color = str(mapping.get(label, default_color))
+        validated[label] = color if color in COLORS else default_color
+    return validated
 
 
 def parse_clock(value: str) -> day_time:
@@ -162,6 +183,14 @@ def color_ratios(frame: np.ndarray, settings: dict[str, Any]) -> dict[str, float
     return ratios
 
 
+def roi_brightness(frame: np.ndarray, settings: dict[str, Any]) -> float:
+    region = crop_roi(frame, settings["roi"])
+    if region.size == 0:
+        return 0.0
+    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+    return float(np.mean(hsv[:, :, 2]))
+
+
 def configured_color_ranges(settings: dict[str, Any]) -> dict[str, dict[str, list[int]]]:
     return {
         color: {
@@ -179,12 +208,64 @@ def detected_color(ratios: dict[str, float], min_ratio: float) -> str:
     return NONE_STATE
 
 
+def home_assistant_get_state(entity_id: str) -> dict[str, Any] | None:
+    entity_id = entity_id.strip()
+    if not entity_id:
+        return None
+
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        return None
+
+    response = requests.get(
+        f"{CORE_API_BASE}/states/{entity_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    if response.status_code == HTTPStatus.NOT_FOUND:
+        return None
+    response.raise_for_status()
+    return response.json()
+
+
+def expected_collection(settings: dict[str, Any]) -> dict[str, Any]:
+    entity_id = settings.get("collection_sensor_entity", "").strip()
+    if not entity_id:
+        return {
+            "entity_id": "",
+            "state": "",
+            "expected_color": "",
+            "expected_state": "",
+            "verification_active": True,
+        }
+
+    entity_state = home_assistant_get_state(entity_id)
+    collection_state = "" if entity_state is None else str(entity_state.get("state", ""))
+    mapping = settings.get("collection_mapping", {})
+    expected_color = ""
+    for label, color in mapping.items():
+        if collection_state.lower() == str(label).lower():
+            expected_color = color
+            break
+
+    return {
+        "entity_id": entity_id,
+        "state": collection_state,
+        "expected_color": expected_color,
+        "expected_state": STATE_NAMES.get(expected_color, ""),
+        "verification_active": bool(expected_color),
+    }
+
+
 def publish_state(
     settings: dict[str, Any],
     state: str,
     candidate_color: str,
     ratios: dict[str, float],
     scheduled: bool,
+    collection: dict[str, Any],
+    brightness: float,
+    too_dark: bool,
 ) -> None:
     token = os.environ.get("SUPERVISOR_TOKEN")
     if not token:
@@ -194,11 +275,18 @@ def publish_state(
         "state": state,
         "attributes": {
             "friendly_name": settings.get("device_name", "Bidone Contarina"),
-            "detected": state != NONE_STATE,
+            "detected": state in STATE_NAMES.values(),
             "candidate_color": candidate_color,
+            "expected_collection": collection["state"],
+            "expected_color": collection["expected_state"],
+            "expected_match": bool(collection["expected_state"] and state == collection["expected_state"]),
+            "verification_active": bool(scheduled and collection["verification_active"]),
             "scheduled_now": scheduled,
+            "brightness": round(brightness, 1),
+            "too_dark": too_dark,
             "color_ratios": {color: round(ratio, 4) for color, ratio in ratios.items()},
             "min_color_ratio": float(settings["min_color_ratio"]),
+            "min_brightness": int(settings["min_brightness"]),
             "roi": settings["roi"],
             "color_ranges": configured_color_ranges(settings),
             "last_scan": datetime.now(ZoneInfo(settings.get("timezone", "Europe/Rome"))).isoformat(),
@@ -257,7 +345,7 @@ def encode_snapshot(frame: np.ndarray) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.4"
+    server_version = "ContarinaWebUi/0.5"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
@@ -359,6 +447,16 @@ def web_ui_html() -> str:
         <label>Sensor entity <input id="entity_id"></label>
         <label>Name <input id="device_name"></label>
         <label>Timezone <input id="timezone"></label>
+        <label>Collection sensor <input id="collection_sensor_entity" placeholder="sensor.raccolta_domani"></label>
+      </div>
+    </section>
+    <section>
+      <h2>Expected Collection Mapping</h2>
+      <div class="grid">
+        <label>Carta color <select id="map_Carta"></select></label>
+        <label>VPL color <select id="map_VPL"></select></label>
+        <label>Umido color <select id="map_Umido"></select></label>
+        <label>Secco color <select id="map_Secco"></select></label>
       </div>
     </section>
     <section>
@@ -368,6 +466,7 @@ def web_ui_html() -> str:
         <label>End time <input id="active_time_end" type="time"></label>
         <label>Scan interval seconds <input id="scan_interval" type="number" min="1"></label>
         <label>Stable frames <input id="consecutive_frames" type="number" min="1"></label>
+        <label>Minimum brightness <input id="min_brightness" type="number" min="0" max="255"></label>
       </div>
       <div class="days" id="monitor_days"></div>
     </section>
@@ -400,10 +499,17 @@ def web_ui_html() -> str:
     const fields = [
       "rtsp_url", "entity_id", "device_name", "timezone", "active_time_start",
       "active_time_end", "scan_interval", "consecutive_frames", "min_color_ratio",
+      "min_brightness", "collection_sensor_entity",
       "gray_hsv_lower", "gray_hsv_upper", "yellow_hsv_lower", "yellow_hsv_upper",
       "blue_hsv_lower", "blue_hsv_upper"
     ];
     const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    const collectionLabels = ["Carta", "VPL", "Umido", "Secco"];
+    const colorOptions = [
+      ["gray", "grigio"],
+      ["yellow", "giallo"],
+      ["blue", "blu"]
+    ];
     const img = document.getElementById("snapshot");
     const canvas = document.getElementById("overlay");
     const ctx = canvas.getContext("2d");
@@ -434,6 +540,19 @@ def web_ui_html() -> str:
       });
     }
 
+    function buildMappingSelects() {
+      collectionLabels.forEach((label) => {
+        const select = document.getElementById(`map_${label}`);
+        select.innerHTML = "";
+        colorOptions.forEach(([value, text]) => {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = text;
+          select.appendChild(option);
+        });
+      });
+    }
+
     function renderSettings() {
       fields.forEach((field) => {
         const input = document.getElementById(field);
@@ -442,6 +561,9 @@ def web_ui_html() -> str:
       });
       document.querySelectorAll("#monitor_days input").forEach((input) => {
         input.checked = settings.monitor_days.includes(input.value);
+      });
+      collectionLabels.forEach((label) => {
+        document.getElementById(`map_${label}`).value = settings.collection_mapping[label];
       });
       draw();
     }
@@ -452,7 +574,7 @@ def web_ui_html() -> str:
         const input = document.getElementById(field);
         if (field.endsWith("_hsv_lower") || field.endsWith("_hsv_upper")) {
           next[field] = textToHsv(input.value);
-        } else if (["scan_interval", "consecutive_frames"].includes(field)) {
+        } else if (["scan_interval", "consecutive_frames", "min_brightness"].includes(field)) {
           next[field] = Number(input.value);
         } else if (field === "min_color_ratio") {
           next[field] = Number(input.value);
@@ -461,6 +583,10 @@ def web_ui_html() -> str:
         }
       });
       next.monitor_days = Array.from(document.querySelectorAll("#monitor_days input:checked")).map((input) => input.value);
+      next.collection_mapping = {};
+      collectionLabels.forEach((label) => {
+        next.collection_mapping[label] = document.getElementById(`map_${label}`).value;
+      });
       return next;
     }
 
@@ -563,6 +689,7 @@ def web_ui_html() -> str:
     document.getElementById("save").addEventListener("click", saveSettings);
 
     buildDays();
+    buildMappingSelects();
     loadSettings().then(refreshSnapshot).catch((error) => setStatus(error.message));
   </script>
 </body>
@@ -581,7 +708,7 @@ def main() -> int:
 
     current_candidate = NONE_STATE
     hits = 0
-    last_state: str | None = None
+    last_publish_signature: tuple[Any, ...] | None = None
     current_rtsp_url = ""
     capture: cv2.VideoCapture | None = None
 
@@ -627,6 +754,8 @@ def main() -> int:
             LATEST_FRAME = frame.copy()
 
         ratios = color_ratios(frame, settings)
+        brightness = roi_brightness(frame, settings)
+        collection = expected_collection(settings)
         candidate_color = detected_color(ratios, min_ratio)
         if candidate_color != NONE_STATE and candidate_color == current_candidate:
             hits += 1
@@ -636,14 +765,28 @@ def main() -> int:
 
         stable_color = candidate_color if hits >= required_frames else NONE_STATE
         scheduled = is_scheduled_now(settings)
-        state = stable_color if scheduled else NONE_STATE
-
-        if state != last_state:
-            publish_state(settings, state, candidate_color, ratios, scheduled)
-            last_state = state
-            log(f"Published {settings['entity_id']}={state} ratios={ratios} scheduled={scheduled}")
+        verification_active = scheduled and collection["verification_active"]
+        too_dark = verification_active and brightness < int(settings["min_brightness"])
+        if too_dark:
+            state = DARK_STATE
+        elif verification_active:
+            state = stable_color
         else:
-            log(f"Scanned candidate={candidate_color} state={state} ratios={ratios} scheduled={scheduled}")
+            state = NONE_STATE
+
+        publish_signature = (
+            state,
+            collection["state"],
+            collection["expected_state"],
+            scheduled,
+            too_dark,
+        )
+        if publish_signature != last_publish_signature:
+            publish_state(settings, state, candidate_color, ratios, scheduled, collection, brightness, too_dark)
+            last_publish_signature = publish_signature
+            log(f"Published {settings['entity_id']}={state} ratios={ratios} scheduled={scheduled} collection={collection}")
+        else:
+            log(f"Scanned candidate={candidate_color} state={state} ratios={ratios} scheduled={scheduled} collection={collection}")
 
         time.sleep(interval)
 

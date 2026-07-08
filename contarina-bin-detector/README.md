@@ -10,16 +10,40 @@ The sensor state is one of:
 - `giallo`
 - `blu`
 - `nessun_bidone`
+- `non_verificabile_buio`
 
 ## Graphical Configuration
 
 1. Install and start the add-on.
 2. Open the add-on page in Home Assistant.
 3. Select **Open Web UI**.
-4. Configure camera, sensor, schedule, color thresholds and ROI.
+4. Configure camera, sensor, expected collection, schedule, color thresholds and ROI.
 5. Click **Save configuration**.
 
 The Web UI saves settings to `/data/settings.json`. The detector reloads them while running, so most changes do not require restarting the add-on.
+
+## Expected Collection Sensor
+
+If another Home Assistant integration exposes the expected collection as `Carta`, `VPL`, `Umido` or `Secco`, add that entity in the **Collection sensor** field.
+
+The Web UI lets you map each value to the expected bin color. Defaults:
+
+- `Carta` -> yellow
+- `VPL` -> blue
+- `Umido` -> gray
+- `Secco` -> gray
+
+The output sensor keeps reporting the detected color, and adds attributes such as `expected_collection`, `expected_color` and `expected_match`.
+
+## Night Handling
+
+When the ROI brightness is below the configured minimum brightness, the sensor reports `non_verificabile_buio`. This is intentional: at night a dark frame should not be treated as a reliable `nessun_bidone`.
+
+Best practical options:
+
+- use the camera IR/night mode if the bin color remains distinguishable;
+- add a small light or motion-triggered illumination near the ROI;
+- tune **Minimum brightness** from the Web UI after checking real night frames.
 
 ## Visual ROI Editor
 
@@ -40,6 +64,7 @@ The state is a bin color only when:
 - the ratio is above the configured minimum color ratio;
 - detection remains stable for the configured number of frames;
 - the current day and time match the configured schedule.
+- when a collection sensor is configured, the collection value maps to an expected bin color.
 
 ## Tuning
 

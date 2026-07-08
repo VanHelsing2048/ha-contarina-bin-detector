@@ -4,6 +4,15 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.5.0] - 2026-07-08
+
+### Added
+
+- Added graphical configuration for an external Home Assistant collection sensor.
+- Added mapping from `Carta`, `VPL`, `Umido` and `Secco` to expected bin colors.
+- Added expected collection attributes: `expected_collection`, `expected_color`, `expected_match` and `verification_active`.
+- Added ROI brightness measurement and `non_verificabile_buio` state when the image is too dark to trust.
+
 ## [0.4.0] - 2026-07-08
 
 ### Changed

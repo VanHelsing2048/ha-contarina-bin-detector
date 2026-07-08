@@ -2,6 +2,15 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.5.0] - 2026-07-08
+
+### Added
+
+- Added Web UI section for an external Home Assistant collection sensor.
+- Added configurable mapping from collection values to expected bin colors.
+- Added expected collection attributes to the output sensor.
+- Added low-light handling with `non_verificabile_buio` state.
+
 ## [0.4.0] - 2026-07-08
 
 ### Changed

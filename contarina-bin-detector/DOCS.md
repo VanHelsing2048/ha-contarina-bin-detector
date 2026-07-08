@@ -10,10 +10,12 @@ All user configuration is graphical. Use **Open Web UI** from the Home Assistant
 2. Open **Open Web UI**.
 3. Enter the RTSP URL.
 4. Keep or change the target entity, default `sensor.contarina_bidone_esposto`.
-5. Save the configuration.
-6. Refresh the frame.
-7. Draw the ROI rectangle.
-8. Save again.
+5. Configure the collection sensor entity if available.
+6. Map collection values to bin colors.
+7. Save the configuration.
+8. Refresh the frame.
+9. Draw the ROI rectangle.
+10. Save again.
 
 Settings are persisted in `/data/settings.json`.
 
@@ -27,6 +29,20 @@ Configure:
 - Home Assistant sensor entity.
 - Friendly name.
 - Timezone.
+- Collection sensor entity.
+
+### Expected Collection Mapping
+
+If another Home Assistant integration exposes the expected collection with states such as `Carta`, `VPL`, `Umido` and `Secco`, enter its entity ID in the Web UI.
+
+Then map each value to the expected bin color. Defaults:
+
+- `Carta` -> yellow.
+- `VPL` -> blue.
+- `Umido` -> gray.
+- `Secco` -> gray.
+
+If no collection sensor is configured, the detector works from the time schedule. If a collection sensor is configured but its current state does not map to a color, verification is inactive and the sensor reports `nessun_bidone`.
 
 ### Schedule
 
@@ -36,6 +52,7 @@ Configure:
 - active end time;
 - scan interval;
 - stable frame count;
+- minimum brightness;
 - allowed weekdays.
 
 If the schedule does not match the current time, the sensor reports `nessun_bidone`.
@@ -54,14 +71,32 @@ OpenCV HSV uses hue from 0 to 179 and saturation/value from 0 to 255.
 
 The ROI editor displays an RTSP snapshot and lets you draw the rectangle directly on the image. The saved rectangle uses the original frame pixel coordinates.
 
+## Night Handling
+
+Color detection is not reliable if the camera cannot see the bin. The add-on measures ROI brightness using the HSV value channel.
+
+When verification is active and brightness is below the configured minimum, the sensor state is:
+
+```text
+non_verificabile_buio
+```
+
+This separates "no bin detected" from "the image is too dark to trust". In practice, the best fixes are camera night mode, a small light near the bin area, or tuning the minimum brightness value using real night snapshots.
+
 ## Output
 
 The configured entity is updated with:
 
-- `state`: `grigio`, `giallo`, `blu` or `nessun_bidone`.
+- `state`: `grigio`, `giallo`, `blu`, `nessun_bidone` or `non_verificabile_buio`.
 - `detected`: whether the published state is a bin color.
 - `candidate_color`: the strongest color candidate in the current scan.
+- `expected_collection`: state read from the configured collection sensor.
+- `expected_color`: expected bin color derived from the collection mapping.
+- `expected_match`: whether the detected color matches the expected color.
+- `verification_active`: whether schedule and expected collection allow verification.
 - `scheduled_now`: whether today and the current time are inside the configured schedule.
+- `brightness`: average ROI brightness.
+- `too_dark`: whether the current frame is below the configured brightness threshold.
 - `color_ratios`: matching-pixel ratio for gray, yellow and blue.
 - `min_color_ratio`: configured threshold.
 - `roi`: configured ROI.
