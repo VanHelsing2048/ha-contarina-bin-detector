@@ -4,6 +4,15 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.4.0] - 2026-07-08
+
+### Changed
+
+- Moved all user configuration from Home Assistant add-on YAML options to the Ingress Web UI.
+- The add-on now starts without manual YAML configuration and waits for the RTSP URL to be saved in the UI.
+- Configuration is persisted in `/data/settings.json`.
+- The Web UI now edits RTSP URL, sensor entity, name, timezone, schedule, scan settings, HSV thresholds and ROI.
+
 ## [0.3.0] - 2026-07-08
 
 ### Added

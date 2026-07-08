@@ -1,5 +1,5 @@
 name: Contarina Bin Detector
-version: "0.3.0"
+version: "0.4.0"
 slug: contarina_bin_detector
 description: Detects which Contarina bin color is visible inside a configured RTSP camera area and publishes a Home Assistant sensor.
 url: "https://github.com/VanHelsing2048/ha-contarina-bin-detector/tree/main/contarina-bin-detector"
@@ -17,68 +17,6 @@ stage: experimental
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:crop-free
-panel_title: Contarina ROI
-options:
-  rtsp_url: "rtsp://user:password@camera.local:554/stream1"
-  entity_id: "sensor.contarina_bidone_esposto"
-  device_name: "Bidone Contarina"
-  timezone: "Europe/Rome"
-  roi:
-    x: 100
-    y: 100
-    width: 300
-    height: 250
-  gray_hsv_lower: [0, 0, 45]
-  gray_hsv_upper: [179, 60, 210]
-  yellow_hsv_lower: [18, 60, 60]
-  yellow_hsv_upper: [38, 255, 255]
-  blue_hsv_lower: [90, 50, 40]
-  blue_hsv_upper: [130, 255, 255]
-  min_color_ratio: 0.08
-  consecutive_frames: 3
-  scan_interval: 10
-  monitor_days:
-    - "mon"
-  active_time_start: "00:00"
-  active_time_end: "23:59"
-schema:
-  rtsp_url: str
-  entity_id: str
-  device_name: str
-  timezone: str
-  roi:
-    x: int
-    y: int
-    width: int
-    height: int
-  gray_hsv_lower:
-    - int
-    - int
-    - int
-  gray_hsv_upper:
-    - int
-    - int
-    - int
-  yellow_hsv_lower:
-    - int
-    - int
-    - int
-  yellow_hsv_upper:
-    - int
-    - int
-    - int
-  blue_hsv_lower:
-    - int
-    - int
-    - int
-  blue_hsv_upper:
-    - int
-    - int
-    - int
-  min_color_ratio: float
-  consecutive_frames: int
-  scan_interval: int
-  monitor_days:
-    - str
-  active_time_start: str
-  active_time_end: str
+panel_title: Contarina
+options: {}
+schema: false

@@ -2,6 +2,15 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.4.0] - 2026-07-08
+
+### Changed
+
+- Removed manual add-on YAML options for normal use.
+- Added full graphical configuration in the Ingress Web UI.
+- Settings are now saved to `/data/settings.json`.
+- The add-on can start before the RTSP stream is configured.
+
 ## [0.3.0] - 2026-07-08
 
 ### Added
