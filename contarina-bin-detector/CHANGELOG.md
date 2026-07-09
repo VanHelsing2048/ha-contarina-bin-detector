@@ -2,6 +2,12 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.9.2] - 2026-07-09
+
+### Fixed
+
+- Added `init: false` to fix `s6-overlay-suexec: fatal: can only run as pid 1` on Home Assistant systems using s6 overlay v3 base images.
+
 ## [0.9.1] - 2026-07-09
 
 ### Fixed

@@ -4,6 +4,12 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.9.2] - 2026-07-09
+
+### Fixed
+
+- Added `init: false` so Home Assistant Supervisor does not wrap the s6-based image with an extra Docker init process.
+
 ## [0.9.1] - 2026-07-09
 
 ### Fixed
