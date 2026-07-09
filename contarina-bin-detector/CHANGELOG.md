@@ -2,6 +2,13 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.1] - 2026-07-09
+
+### Fixed
+
+- Fixed GHCR publishing by using one prebuilt image per Home Assistant architecture.
+- Kept support for `aarch64`, `amd64`, `armhf`, `armv7` and `i386` through the `{arch}` image placeholder.
+
 ## [0.11.0] - 2026-07-09
 
 ### Added

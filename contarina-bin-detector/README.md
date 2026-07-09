@@ -65,7 +65,7 @@ From version `0.11.0`, Home Assistant pulls the add-on image from GitHub Contain
 The image is published as:
 
 ```text
-ghcr.io/vanhelsing2048/ha-contarina-bin-detector
+ghcr.io/vanhelsing2048/{arch}-ha-contarina-bin-detector
 ```
 
 Supported platforms are `amd64`, `aarch64`, `armv7`, `armhf` and `i386`.

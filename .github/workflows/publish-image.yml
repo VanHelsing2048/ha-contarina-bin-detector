@@ -13,11 +13,30 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/vanhelsing2048/ha-contarina-bin-detector
+  IMAGE_PREFIX: ghcr.io/vanhelsing2048
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            build_from: ghcr.io/home-assistant/base:3.21
+          - arch: aarch64
+            platform: linux/arm64
+            build_from: ghcr.io/home-assistant/base:3.21
+          - arch: armv7
+            platform: linux/arm/v7
+            build_from: ghcr.io/home-assistant/armv7-base:3.21
+          - arch: armhf
+            platform: linux/arm/v6
+            build_from: ghcr.io/home-assistant/armhf-base:3.21
+          - arch: i386
+            platform: linux/386
+            build_from: ghcr.io/home-assistant/i386-base:3.21
 
     steps:
       - name: Checkout
@@ -48,10 +67,12 @@ jobs:
         with:
           context: contarina-bin-detector
           file: contarina-bin-detector/Dockerfile
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/386
+          platforms: ${{ matrix.platform }}
           push: true
           build-args: |
+            BUILD_FROM=${{ matrix.build_from }}
+            BUILD_ARCH=${{ matrix.arch }}
             BUILD_VERSION=${{ steps.addon.outputs.version }}
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ steps.addon.outputs.version }}
-            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.arch }}-ha-contarina-bin-detector:${{ steps.addon.outputs.version }}
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.arch }}-ha-contarina-bin-detector:latest

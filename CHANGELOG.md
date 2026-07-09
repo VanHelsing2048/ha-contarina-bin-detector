@@ -4,6 +4,13 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.1] - 2026-07-09
+
+### Fixed
+
+- Switched prebuilt images to Home Assistant's `{arch}` image naming pattern so all declared add-on architectures can use the correct base image.
+- Fixed GitHub Actions publishing by building one image per Home Assistant architecture.
+
 ## [0.11.0] - 2026-07-09
 
 ### Added

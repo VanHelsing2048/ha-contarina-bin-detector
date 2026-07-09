@@ -37,7 +37,7 @@ The default scan interval is 300 seconds. This is intended for low-frequency che
 From version `0.11.0`, the add-on uses a prebuilt multi-architecture image from GitHub Container Registry:
 
 ```text
-ghcr.io/vanhelsing2048/ha-contarina-bin-detector
+ghcr.io/vanhelsing2048/{arch}-ha-contarina-bin-detector
 ```
 
 Home Assistant should pull this image instead of building OpenCV locally on the device.
