@@ -1,5 +1,5 @@
 name: Contarina Bin Detector
-version: "0.11.1"
+version: "0.11.2"
 slug: contarina_bin_detector
 description: Detects which Contarina bin color is visible inside a configured RTSP camera area and publishes a Home Assistant sensor.
 url: "https://github.com/VanHelsing2048/ha-contarina-bin-detector/tree/main/contarina-bin-detector"
@@ -60,10 +60,10 @@ schema:
   device_name: "str?"
   collection_sensor_entity: "str?"
   collection_mapping:
-    Carta: "list(gray|yellow|blue)?"
-    VPL: "list(gray|yellow|blue)?"
-    Umido: "list(gray|yellow|blue)?"
-    Secco: "list(gray|yellow|blue)?"
+    Carta: "str?"
+    VPL: "str?"
+    Umido: "str?"
+    Secco: "str?"
   timezone: "str?"
   gray_hsv_lower: "str?"
   gray_hsv_upper: "str?"

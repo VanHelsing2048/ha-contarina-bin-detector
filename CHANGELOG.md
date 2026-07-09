@@ -4,6 +4,12 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.2] - 2026-07-09
+
+### Fixed
+
+- Relaxed nested collection mapping schema values from enum selectors to strings to avoid Home Assistant `not a valid value` save errors.
+
 ## [0.11.1] - 2026-07-09
 
 ### Fixed

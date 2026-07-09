@@ -2,6 +2,12 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.2] - 2026-07-09
+
+### Fixed
+
+- Fixed Configuration save errors by making the nested collection mapping schema less strict. Values are still validated by the detector at runtime.
+
 ## [0.11.1] - 2026-07-09
 
 ### Fixed
