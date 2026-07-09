@@ -58,6 +58,18 @@ The **Refresh frame** button in the Web UI also captures a fresh frame on demand
 
 The **Debug overlay** button captures a fresh frame and draws the ROI plus diagnostic text directly on the snapshot. It is useful for tuning color thresholds, brightness, contrast and sharpness.
 
+## Prebuilt Images
+
+From version `0.11.0`, Home Assistant pulls the add-on image from GitHub Container Registry instead of building it locally on the device.
+
+The image is published as:
+
+```text
+ghcr.io/vanhelsing2048/ha-contarina-bin-detector
+```
+
+Supported platforms are `amd64`, `aarch64`, `armv7`, `armhf` and `i386`.
+
 ## Expected Collection Sensor
 
 If another Home Assistant integration exposes the expected collection as `Carta`, `VPL`, `Umido` or `Secco`, add that entity in the **Collection sensor** option.

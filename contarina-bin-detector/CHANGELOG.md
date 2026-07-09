@@ -2,6 +2,13 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.0] - 2026-07-09
+
+### Added
+
+- Added prebuilt GitHub Container Registry image support so Home Assistant can pull the add-on instead of building it locally.
+- Added multi-architecture image publishing for Raspberry Pi and common Home Assistant platforms.
+
 ## [0.10.1] - 2026-07-09
 
 ### Fixed

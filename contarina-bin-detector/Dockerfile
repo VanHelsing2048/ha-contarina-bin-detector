@@ -8,7 +8,7 @@ LABEL \
     io.hass.description="Detects which Contarina bin color is visible in an RTSP camera area and publishes a Home Assistant sensor" \
     io.hass.version="${BUILD_VERSION}" \
     io.hass.type="app" \
-    io.hass.arch="${BUILD_ARCH}"
+    io.hass.arch="aarch64|amd64|armhf|armv7|i386"
 
 RUN apk add --no-cache \
     python3 \

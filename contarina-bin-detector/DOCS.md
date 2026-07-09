@@ -32,6 +32,16 @@ The add-on does not continuously analyze the RTSP stream. On each scan it:
 
 The default scan interval is 300 seconds. This is intended for low-frequency checks such as verifying whether the bin has been put out.
 
+## Prebuilt Image
+
+From version `0.11.0`, the add-on uses a prebuilt multi-architecture image from GitHub Container Registry:
+
+```text
+ghcr.io/vanhelsing2048/ha-contarina-bin-detector
+```
+
+Home Assistant should pull this image instead of building OpenCV locally on the device.
+
 ## Add-on Configuration
 
 ### Camera and Sensor
