@@ -2,7 +2,7 @@
 
 Home Assistant add-on that detects whether a gray, yellow or blue Contarina bin is visible in an RTSP camera area.
 
-The add-on is configured graphically from **Open Web UI**. You do not need to edit the add-on YAML options.
+Stable settings are configured from the Home Assistant add-on **Configuration** tab. The Web UI is only for snapshot checks, ROI selection, debug overlay and notification testing.
 
 The detector runs as a standard s6 service inside the Home Assistant base image. The add-on sets `init: false` so s6 remains the container PID 1 process.
 
@@ -14,15 +14,17 @@ The sensor state is one of:
 - `nessun_bidone`
 - `non_verificabile`
 
-## Graphical Configuration
+## Configuration
 
 1. Install and start the add-on.
 2. Open the add-on page in Home Assistant.
-3. Select **Open Web UI**.
-4. Configure camera, sensor, expected collection, schedule, color thresholds and ROI.
-5. Click **Save configuration**.
+3. Open **Configuration**.
+4. Configure camera, sensor, expected collection, schedule, color thresholds and notifications.
+5. Save and restart the add-on if Home Assistant asks for it.
+6. Select **Open Web UI**.
+7. Refresh the frame, draw the ROI and click **Save ROI**.
 
-The Web UI saves settings to `/data/settings.json`. The detector reloads them while running, so most changes do not require restarting the add-on.
+Home Assistant stores fixed add-on options in `/data/options.json`. The Web UI stores only the ROI in `/data/settings.json`.
 
 ## Contarina Color Presets
 
@@ -32,11 +34,11 @@ The default HSV ranges are based on the provided reference images:
 - SEC/secco gray: `gray_hsv_lower [0, 0, 55]`, `gray_hsv_upper [179, 55, 190]`
 - VPL blue: `blue_hsv_lower [92, 55, 50]`, `blue_hsv_upper [118, 255, 230]`
 
-If the add-on already has saved settings, use **Apply Contarina color presets** in the Web UI and then save the configuration.
+The presets are the default add-on Configuration values. Existing installs can copy these values into the Configuration tab if needed.
 
 ## Smartphone Notifications
 
-Enable notifications in the Web UI and set the Home Assistant mobile notify service, for example:
+Enable notifications in the add-on Configuration tab and set the Home Assistant mobile notify service, for example:
 
 ```text
 notify.mobile_app_iphone
@@ -58,9 +60,9 @@ The **Debug overlay** button captures a fresh frame and draws the ROI plus diagn
 
 ## Expected Collection Sensor
 
-If another Home Assistant integration exposes the expected collection as `Carta`, `VPL`, `Umido` or `Secco`, add that entity in the **Collection sensor** field.
+If another Home Assistant integration exposes the expected collection as `Carta`, `VPL`, `Umido` or `Secco`, add that entity in the **Collection sensor** option.
 
-The Web UI lets you map each value to the expected bin color. Defaults:
+The add-on Configuration tab lets you map each value to the expected bin color. Defaults:
 
 - `Carta` -> yellow
 - `VPL` -> blue
@@ -73,22 +75,22 @@ The output sensor keeps reporting the detected color, and adds attributes such a
 
 When the ROI is too dark, too flat/low-contrast or too blurry, the sensor reports `non_verificabile`. This is intentional: an unreadable frame should not be treated as a reliable `nessun_bidone`.
 
-The Web UI exposes thresholds for minimum brightness, contrast and sharpness.
+The add-on Configuration tab exposes thresholds for minimum brightness, contrast and sharpness.
 
 Best practical options:
 
 - use the camera IR/night mode if the bin color remains distinguishable;
 - add a small light or motion-triggered illumination near the ROI;
-- tune brightness, contrast and sharpness from the Web UI after checking real night frames.
+- tune brightness, contrast and sharpness from the Configuration tab after checking real night frames.
 
 ## Visual ROI Editor
 
 The Web UI shows a snapshot from the configured RTSP stream.
 
-1. Save the RTSP URL.
+1. Save the RTSP URL in the add-on Configuration tab.
 2. Click **Refresh frame**.
 3. Draw a rectangle over the area where the bin appears.
-4. Click **Save configuration**.
+4. Click **Save ROI**.
 
 The rectangle is stored using the real RTSP frame pixel coordinates.
 

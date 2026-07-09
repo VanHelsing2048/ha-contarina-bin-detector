@@ -14,7 +14,8 @@ The add-on reads an RTSP stream, checks a configured pixel area, detects whether
 
 - RTSP camera input.
 - Periodic fresh RTSP snapshot capture, defaulting to one scan every 5 minutes.
-- Visual configuration for camera, sensor, schedule, color thresholds and ROI.
+- Home Assistant add-on Configuration schema for stable settings.
+- Ingress Web UI for snapshot, ROI selection, debug overlay and notification testing.
 - HSV color detection for gray, yellow and blue bins.
 - Contarina color presets derived from the provided CAR, SEC and VPL reference images.
 - Expected collection sensor mapping for `Carta`, `VPL`, `Umido` and `Secco`.
@@ -49,6 +50,6 @@ This repository uses semantic versioning. Add-on versions are defined in `contar
 
 ## Status
 
-Current release: `0.9.2`.
+Current release: `0.10.0`.
 
 The add-on is marked as experimental until it has been tested against a real RTSP stream and a few lighting conditions.

@@ -4,6 +4,14 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.10.0] - 2026-07-09
+
+### Changed
+
+- Moved stable configuration back to the Home Assistant add-on Configuration tab with a schema.
+- Simplified the Web UI so it only handles ROI drawing, snapshot refresh, debug overlay and notification testing.
+- The Web UI now persists only the ROI in `/data/settings.json`; fixed options are read from `/data/options.json`.
+
 ## [0.9.2] - 2026-07-09
 
 ### Fixed

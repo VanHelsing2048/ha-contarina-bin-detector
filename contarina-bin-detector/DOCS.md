@@ -2,22 +2,23 @@
 
 This add-on detects whether a gray, yellow or blue Contarina bin is visible in a selected area of an RTSP camera stream.
 
-All user configuration is graphical. Use **Open Web UI** from the Home Assistant add-on page.
+Stable settings are configured from the Home Assistant add-on **Configuration** tab. Use **Open Web UI** only for snapshot checks, ROI selection, debug overlay and notification testing.
 
 ## First Setup
 
 1. Install and start the add-on.
-2. Open **Open Web UI**.
+2. Open the add-on **Configuration** tab.
 3. Enter the RTSP URL.
 4. Keep or change the target entity, default `sensor.contarina_bidone_esposto`.
 5. Configure the collection sensor entity if available.
 6. Map collection values to bin colors.
-7. Save the configuration.
-8. Refresh the frame.
-9. Draw the ROI rectangle.
-10. Save again.
+7. Save the add-on configuration and restart if Home Assistant asks for it.
+8. Open **Open Web UI**.
+9. Refresh the frame.
+10. Draw the ROI rectangle.
+11. Save the ROI.
 
-Settings are persisted in `/data/settings.json`.
+Fixed options are persisted by Home Assistant in `/data/options.json`. The ROI is persisted by the Web UI in `/data/settings.json`.
 
 ## Scan Model
 
@@ -31,7 +32,7 @@ The add-on does not continuously analyze the RTSP stream. On each scan it:
 
 The default scan interval is 300 seconds. This is intended for low-frequency checks such as verifying whether the bin has been put out.
 
-## Web UI Sections
+## Add-on Configuration
 
 ### Camera and Sensor
 
@@ -63,7 +64,7 @@ Use **Test notification** to send an immediate sample notification with the curr
 
 ### Expected Collection Mapping
 
-If another Home Assistant integration exposes the expected collection with states such as `Carta`, `VPL`, `Umido` and `Secco`, enter its entity ID in the Web UI.
+If another Home Assistant integration exposes the expected collection with states such as `Carta`, `VPL`, `Umido` and `Secco`, enter its entity ID in the add-on Configuration tab.
 
 Then map each value to the expected bin color. Defaults:
 
@@ -105,11 +106,11 @@ The default Contarina presets are derived from the supplied CAR, SEC and VPL ref
 - SEC/secco gray: lower `[0, 0, 55]`, upper `[179, 55, 190]`.
 - VPL blue: lower `[92, 55, 50]`, upper `[118, 255, 230]`.
 
-Use **Apply Contarina color presets** in the Web UI if existing saved settings still contain older thresholds.
+The Contarina color presets are the default Configuration values.
 
 ### ROI
 
-The ROI editor displays an RTSP snapshot and lets you draw the rectangle directly on the image. The saved rectangle uses the original frame pixel coordinates.
+The Web UI ROI editor displays an RTSP snapshot and lets you draw the rectangle directly on the image. The saved rectangle uses the original frame pixel coordinates.
 
 Use **Debug overlay** to capture a fresh frame with the ROI, detected state, expected collection, color ratios and image-quality values drawn on the snapshot.
 

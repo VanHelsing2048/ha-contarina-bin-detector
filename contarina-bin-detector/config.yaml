@@ -1,5 +1,5 @@
 name: Contarina Bin Detector
-version: "0.9.2"
+version: "0.10.0"
 slug: contarina_bin_detector
 description: Detects which Contarina bin color is visible inside a configured RTSP camera area and publishes a Home Assistant sensor.
 url: "https://github.com/VanHelsing2048/ha-contarina-bin-detector/tree/main/contarina-bin-detector"
@@ -19,5 +19,71 @@ ingress: true
 ingress_port: 8099
 panel_icon: mdi:crop-free
 panel_title: Contarina
-options: {}
-schema: false
+options:
+  rtsp_url: ""
+  entity_id: sensor.contarina_bidone_esposto
+  device_name: Bidone Contarina
+  collection_sensor_entity: ""
+  collection_mapping:
+    Carta: yellow
+    VPL: blue
+    Umido: gray
+    Secco: gray
+  timezone: Europe/Rome
+  gray_hsv_lower: "0, 0, 55"
+  gray_hsv_upper: "179, 55, 190"
+  yellow_hsv_lower: "14, 70, 90"
+  yellow_hsv_upper: "34, 255, 255"
+  blue_hsv_lower: "92, 55, 50"
+  blue_hsv_upper: "118, 255, 230"
+  min_color_ratio: 0.08
+  min_brightness: 35
+  min_contrast: 15
+  min_sharpness: 20
+  consecutive_frames: 1
+  scan_interval: 300
+  monitor_days: mon
+  active_time_start: "00:00"
+  active_time_end: "23:59"
+  notify_enabled: false
+  notify_service: ""
+  notify_tag: contarina_bin_reminder
+  notify_cooldown: 3600
+  notify_unreliable: true
+  notify_title: Bidone da esporre
+  notify_message: Bidone {color} da esporre oggi.
+  notify_unreliable_message: "Non riesco a verificare il bidone: {reason}."
+schema:
+  rtsp_url: str
+  entity_id: str
+  device_name: str
+  collection_sensor_entity: str
+  collection_mapping:
+    Carta: list(gray|yellow|blue)
+    VPL: list(gray|yellow|blue)
+    Umido: list(gray|yellow|blue)
+    Secco: list(gray|yellow|blue)
+  timezone: str
+  gray_hsv_lower: str
+  gray_hsv_upper: str
+  yellow_hsv_lower: str
+  yellow_hsv_upper: str
+  blue_hsv_lower: str
+  blue_hsv_upper: str
+  min_color_ratio: float
+  min_brightness: int
+  min_contrast: float
+  min_sharpness: float
+  consecutive_frames: int
+  scan_interval: int
+  monitor_days: str
+  active_time_start: str
+  active_time_end: str
+  notify_enabled: bool
+  notify_service: str
+  notify_tag: str
+  notify_cooldown: int
+  notify_unreliable: bool
+  notify_title: str
+  notify_message: str
+  notify_unreliable_message: str

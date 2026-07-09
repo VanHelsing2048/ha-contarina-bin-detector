@@ -15,6 +15,7 @@ import numpy as np
 import requests
 
 
+OPTIONS_PATH = "/data/options.json"
 SETTINGS_PATH = "/data/settings.json"
 NOTIFICATION_STATE_PATH = "/data/notification_state.json"
 CORE_API_BASE = "http://supervisor/core/api"
@@ -90,11 +91,20 @@ def log(message: str) -> None:
 
 def load_settings() -> dict[str, Any]:
     settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+    if os.path.exists(OPTIONS_PATH):
+        try:
+            with open(OPTIONS_PATH, "r", encoding="utf-8") as options_file:
+                options = json.load(options_file)
+            settings.update(options)
+        except Exception as error:
+            log(f"Ignoring invalid options file: {error}")
+
     if os.path.exists(SETTINGS_PATH):
         try:
             with open(SETTINGS_PATH, "r", encoding="utf-8") as settings_file:
                 saved = json.load(settings_file)
-            settings.update(saved)
+            if "roi" in saved:
+                settings["roi"] = saved["roi"]
         except Exception as error:
             log(f"Ignoring invalid settings file: {error}")
 
@@ -102,37 +112,27 @@ def load_settings() -> dict[str, Any]:
     for color in COLORS:
         settings[f"{color}_hsv_lower"] = validate_hsv(settings[f"{color}_hsv_lower"])
         settings[f"{color}_hsv_upper"] = validate_hsv(settings[f"{color}_hsv_upper"])
-    settings["monitor_days"] = [
-        day for day in settings.get("monitor_days", []) if str(day).lower() in WEEKDAYS
-    ]
+    settings["monitor_days"] = validate_monitor_days(settings.get("monitor_days", []))
     settings["collection_mapping"] = validate_collection_mapping(settings.get("collection_mapping", {}))
+    settings["min_color_ratio"] = max(0.0, min(1.0, float(settings.get("min_color_ratio", 0.08))))
+    settings["min_brightness"] = max(0, min(255, int(settings.get("min_brightness", 35))))
+    settings["min_contrast"] = max(0, float(settings.get("min_contrast", 15)))
+    settings["min_sharpness"] = max(0, float(settings.get("min_sharpness", 20)))
+    settings["consecutive_frames"] = max(1, int(settings.get("consecutive_frames", 1)))
+    settings["scan_interval"] = max(1, int(settings.get("scan_interval", 300)))
+    settings["notify_enabled"] = bool(settings.get("notify_enabled", False))
+    settings["notify_unreliable"] = bool(settings.get("notify_unreliable", True))
+    settings["notify_cooldown"] = max(60, int(settings.get("notify_cooldown", 3600)))
     return settings
 
 
 def save_settings(settings: dict[str, Any]) -> dict[str, Any]:
     merged = load_settings()
-    merged.update(settings)
-    merged["roi"] = validate_roi(merged["roi"])
-    for color in COLORS:
-        merged[f"{color}_hsv_lower"] = validate_hsv(merged[f"{color}_hsv_lower"])
-        merged[f"{color}_hsv_upper"] = validate_hsv(merged[f"{color}_hsv_upper"])
-    merged["min_color_ratio"] = max(0.0, min(1.0, float(merged["min_color_ratio"])))
-    merged["min_brightness"] = max(0, min(255, int(merged["min_brightness"])))
-    merged["min_contrast"] = max(0, float(merged.get("min_contrast", 15)))
-    merged["min_sharpness"] = max(0, float(merged.get("min_sharpness", 20)))
-    merged["consecutive_frames"] = max(1, int(merged["consecutive_frames"]))
-    merged["scan_interval"] = max(1, int(merged["scan_interval"]))
-    merged["notify_enabled"] = bool(merged.get("notify_enabled", False))
-    merged["notify_unreliable"] = bool(merged.get("notify_unreliable", True))
-    merged["notify_cooldown"] = max(60, int(merged.get("notify_cooldown", 3600)))
-    merged["monitor_days"] = [
-        day for day in merged.get("monitor_days", []) if str(day).lower() in WEEKDAYS
-    ]
-    merged["collection_mapping"] = validate_collection_mapping(merged.get("collection_mapping", {}))
+    merged["roi"] = validate_roi(settings.get("roi", merged["roi"]))
 
     os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
     with open(SETTINGS_PATH, "w", encoding="utf-8") as settings_file:
-        json.dump(merged, settings_file, indent=2)
+        json.dump({"roi": merged["roi"]}, settings_file, indent=2)
         settings_file.write("\n")
     return merged
 
@@ -147,10 +147,20 @@ def validate_roi(roi: dict[str, Any]) -> dict[str, int]:
 
 
 def validate_hsv(value: list[Any]) -> list[int]:
+    if isinstance(value, str):
+        value = [part.strip() for part in value.split(",")]
     hue = max(0, min(179, int(value[0])))
     saturation = max(0, min(255, int(value[1])))
     brightness = max(0, min(255, int(value[2])))
     return [hue, saturation, brightness]
+
+
+def validate_monitor_days(value: Any) -> list[str]:
+    if isinstance(value, str):
+        days = [day.strip().lower() for day in value.split(",")]
+    else:
+        days = [str(day).strip().lower() for day in value]
+    return [day for day in days if day in WEEKDAYS]
 
 
 def validate_collection_mapping(mapping: dict[str, Any]) -> dict[str, str]:
@@ -618,7 +628,7 @@ def encode_snapshot(frame: np.ndarray) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.9"
+    server_version = "ContarinaWebUi/0.10"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
@@ -646,8 +656,7 @@ class WebUiHandler(BaseHTTPRequestHandler):
             log("Saved settings from Web UI")
             return
         if self.path.startswith("/api/test-notification"):
-            payload = self.read_json_body()
-            settings = save_settings(payload)
+            settings = load_settings()
             try:
                 send_test_notification(settings)
             except Exception as error:
@@ -732,13 +741,11 @@ def web_ui_html() -> str:
     button.secondary { background: #40515f; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .days { display: flex; flex-wrap: wrap; gap: 8px; }
-    .days label { display: flex; gap: 6px; align-items: center; }
-    .days input { width: auto; }
     .stage { position: relative; display: inline-block; max-width: 100%; background: #050708; border: 1px solid #2d3a43; }
     img { display: block; max-width: 100%; height: auto; user-select: none; }
     canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
     .status { margin-top: 12px; color: #bcc8cf; font-size: 14px; }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; color: #c9d4da; font-size: 13px; }
     code { color: #d8e7ff; }
   </style>
 </head>
@@ -746,66 +753,10 @@ def web_ui_html() -> str:
   <main>
     <h1>Contarina Bin Detector</h1>
     <section>
-      <h2>Camera and Sensor</h2>
-      <div class="grid">
-        <label>RTSP URL <input id="rtsp_url" autocomplete="off"></label>
-        <label>Sensor entity <input id="entity_id"></label>
-        <label>Name <input id="device_name"></label>
-        <label>Timezone <input id="timezone"></label>
-        <label>Collection sensor <input id="collection_sensor_entity" placeholder="sensor.raccolta_domani"></label>
-      </div>
-    </section>
-    <section>
-      <h2>Mobile Notifications</h2>
-      <div class="grid">
-        <label><span><input id="notify_enabled" type="checkbox"> Enable smartphone notification</span></label>
-        <label>Notify service <input id="notify_service" placeholder="notify.mobile_app_phone"></label>
-        <label>Notification tag <input id="notify_tag"></label>
-        <label>Cooldown seconds <input id="notify_cooldown" type="number" min="60"></label>
-        <label>Title <input id="notify_title"></label>
-        <label>Reminder message <input id="notify_message"></label>
-        <label>Not reliable message <input id="notify_unreliable_message"></label>
-        <label><span><input id="notify_unreliable" type="checkbox"> Notify when verification is not reliable</span></label>
-      </div>
+      <h2>Configured in Home Assistant</h2>
+      <div class="summary" id="summary"></div>
       <div class="row" style="margin-top: 12px;">
         <button class="secondary" id="test_notification" type="button">Test notification</button>
-      </div>
-    </section>
-    <section>
-      <h2>Expected Collection Mapping</h2>
-      <div class="grid">
-        <label>Carta color <select id="map_Carta"></select></label>
-        <label>VPL color <select id="map_VPL"></select></label>
-        <label>Umido color <select id="map_Umido"></select></label>
-        <label>Secco color <select id="map_Secco"></select></label>
-      </div>
-    </section>
-    <section>
-      <h2>Schedule</h2>
-      <div class="grid">
-        <label>Start time <input id="active_time_start" type="time"></label>
-        <label>End time <input id="active_time_end" type="time"></label>
-        <label>Scan interval seconds <input id="scan_interval" type="number" min="1"></label>
-        <label>Stable frames <input id="consecutive_frames" type="number" min="1"></label>
-        <label>Minimum brightness <input id="min_brightness" type="number" min="0" max="255"></label>
-        <label>Minimum contrast <input id="min_contrast" type="number" min="0" step="0.1"></label>
-        <label>Minimum sharpness <input id="min_sharpness" type="number" min="0" step="0.1"></label>
-      </div>
-      <div class="days" id="monitor_days"></div>
-    </section>
-    <section>
-      <h2>Color Thresholds</h2>
-      <div class="grid">
-        <label>Minimum color ratio <input id="min_color_ratio" type="number" min="0" max="1" step="0.01"></label>
-        <label>Gray lower HSV <input id="gray_hsv_lower"></label>
-        <label>Gray upper HSV <input id="gray_hsv_upper"></label>
-        <label>Yellow lower HSV <input id="yellow_hsv_lower"></label>
-        <label>Yellow upper HSV <input id="yellow_hsv_upper"></label>
-        <label>Blue lower HSV <input id="blue_hsv_lower"></label>
-        <label>Blue upper HSV <input id="blue_hsv_upper"></label>
-      </div>
-      <div class="row" style="margin-top: 12px;">
-        <button class="secondary" id="presets" type="button">Apply Contarina color presets</button>
       </div>
     </section>
     <section>
@@ -813,7 +764,7 @@ def web_ui_html() -> str:
         <h2>ROI</h2>
         <button class="secondary" id="refresh" type="button">Refresh frame</button>
         <button class="secondary" id="debug" type="button">Debug overlay</button>
-        <button id="save" type="button">Save configuration</button>
+        <button id="save" type="button">Save ROI</button>
       </div>
       <div class="stage">
         <img id="snapshot" alt="RTSP snapshot">
@@ -823,26 +774,11 @@ def web_ui_html() -> str:
     </section>
   </main>
   <script>
-    const fields = [
-      "rtsp_url", "entity_id", "device_name", "timezone", "active_time_start",
-      "active_time_end", "scan_interval", "consecutive_frames", "min_color_ratio",
-      "min_brightness", "min_contrast", "min_sharpness", "collection_sensor_entity",
-      "notify_service", "notify_tag", "notify_cooldown", "notify_title",
-      "notify_message", "notify_unreliable_message",
-      "gray_hsv_lower", "gray_hsv_upper", "yellow_hsv_lower", "yellow_hsv_upper",
-      "blue_hsv_lower", "blue_hsv_upper"
-    ];
-    const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-    const collectionLabels = ["Carta", "VPL", "Umido", "Secco"];
-    const colorOptions = [
-      ["gray", "grigio"],
-      ["yellow", "giallo"],
-      ["blue", "blu"]
-    ];
     const img = document.getElementById("snapshot");
     const canvas = document.getElementById("overlay");
     const ctx = canvas.getContext("2d");
     const statusEl = document.getElementById("status");
+    const summaryEl = document.getElementById("summary");
     let settings = null;
     let drawing = false;
     let start = null;
@@ -851,76 +787,18 @@ def web_ui_html() -> str:
       statusEl.innerHTML = message;
     }
 
-    function hsvToText(value) {
-      return value.join(", ");
-    }
-
-    function textToHsv(value) {
-      return value.split(",").map((part) => Number(part.trim()));
-    }
-
-    function buildDays() {
-      const container = document.getElementById("monitor_days");
-      container.innerHTML = "";
-      weekdays.forEach((day) => {
-        const label = document.createElement("label");
-        label.innerHTML = `<input type="checkbox" value="${day}"> ${day}`;
-        container.appendChild(label);
-      });
-    }
-
-    function buildMappingSelects() {
-      collectionLabels.forEach((label) => {
-        const select = document.getElementById(`map_${label}`);
-        select.innerHTML = "";
-        colorOptions.forEach(([value, text]) => {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = text;
-          select.appendChild(option);
-        });
-      });
-    }
-
     function renderSettings() {
-      fields.forEach((field) => {
-        const input = document.getElementById(field);
-        const value = settings[field];
-        input.value = Array.isArray(value) ? hsvToText(value) : value;
-      });
-      document.querySelectorAll("#monitor_days input").forEach((input) => {
-        input.checked = settings.monitor_days.includes(input.value);
-      });
-      document.getElementById("notify_enabled").checked = Boolean(settings.notify_enabled);
-      document.getElementById("notify_unreliable").checked = Boolean(settings.notify_unreliable);
-      collectionLabels.forEach((label) => {
-        document.getElementById(`map_${label}`).value = settings.collection_mapping[label];
-      });
+      const notify = settings.notify_enabled ? settings.notify_service || "-" : "disabled";
+      const collection = settings.collection_sensor_entity || "not configured";
+      summaryEl.innerHTML = `
+        <div>Sensor: <code>${settings.entity_id}</code></div>
+        <div>RTSP: <code>${settings.rtsp_url ? "configured" : "missing"}</code></div>
+        <div>Collection sensor: <code>${collection}</code></div>
+        <div>Schedule: <code>${settings.monitor_days.join(",") || "all"} ${settings.active_time_start}-${settings.active_time_end}</code></div>
+        <div>Scan interval: <code>${settings.scan_interval}s</code></div>
+        <div>Notifications: <code>${notify}</code></div>
+      `;
       draw();
-    }
-
-    function collectSettings() {
-      const next = {...settings};
-      fields.forEach((field) => {
-        const input = document.getElementById(field);
-        if (field.endsWith("_hsv_lower") || field.endsWith("_hsv_upper")) {
-          next[field] = textToHsv(input.value);
-        } else if (["scan_interval", "consecutive_frames", "min_brightness", "notify_cooldown"].includes(field)) {
-          next[field] = Number(input.value);
-        } else if (["min_color_ratio", "min_contrast", "min_sharpness"].includes(field)) {
-          next[field] = Number(input.value);
-        } else {
-          next[field] = input.value;
-        }
-      });
-      next.monitor_days = Array.from(document.querySelectorAll("#monitor_days input:checked")).map((input) => input.value);
-      next.notify_enabled = document.getElementById("notify_enabled").checked;
-      next.notify_unreliable = document.getElementById("notify_unreliable").checked;
-      next.collection_mapping = {};
-      collectionLabels.forEach((label) => {
-        next.collection_mapping[label] = document.getElementById(`map_${label}`).value;
-      });
-      return next;
     }
 
     function syncCanvas() {
@@ -1002,25 +880,23 @@ def web_ui_html() -> str:
     }
 
     async function saveSettings() {
-      settings = collectSettings();
       const response = await fetch("api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings)
+        body: JSON.stringify({roi: settings.roi})
       });
       const result = await response.json();
       settings = result.settings;
       renderSettings();
-      setStatus("Configuration saved.");
+      setStatus("ROI saved.");
       refreshSnapshot();
     }
 
     async function testNotification() {
-      settings = collectSettings();
       const response = await fetch("api/test-notification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings)
+        body: "{}"
       });
       if (!response.ok) {
         setStatus("Test notification failed. Check notify service and logs.");
@@ -1029,21 +905,8 @@ def web_ui_html() -> str:
       setStatus("Test notification sent.");
     }
 
-    async function applyColorPresets() {
-      const response = await fetch("api/color-presets");
-      const presets = await response.json();
-      settings.gray_hsv_lower = presets.gray.lower;
-      settings.gray_hsv_upper = presets.gray.upper;
-      settings.yellow_hsv_lower = presets.yellow.lower;
-      settings.yellow_hsv_upper = presets.yellow.upper;
-      settings.blue_hsv_lower = presets.blue.lower;
-      settings.blue_hsv_upper = presets.blue.upper;
-      renderSettings();
-      setStatus("Contarina color presets applied. Save configuration to keep them.");
-    }
-
     img.addEventListener("load", syncCanvas);
-    img.addEventListener("error", () => setStatus("Snapshot unavailable. Check the RTSP URL and save the configuration."));
+    img.addEventListener("error", () => setStatus("Snapshot unavailable. Check the RTSP URL in the add-on Configuration tab."));
     window.addEventListener("resize", syncCanvas);
     document.getElementById("refresh").addEventListener("click", refreshSnapshot);
     document.getElementById("debug").addEventListener("click", () => {
@@ -1052,10 +915,7 @@ def web_ui_html() -> str:
     });
     document.getElementById("save").addEventListener("click", saveSettings);
     document.getElementById("test_notification").addEventListener("click", testNotification);
-    document.getElementById("presets").addEventListener("click", applyColorPresets);
 
-    buildDays();
-    buildMappingSelects();
     loadSettings().then(refreshSnapshot).catch((error) => setStatus(error.message));
   </script>
 </body>

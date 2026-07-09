@@ -2,6 +2,14 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.10.0] - 2026-07-09
+
+### Changed
+
+- Moved fixed settings to the Home Assistant add-on Configuration tab.
+- Simplified the Web UI to snapshot refresh, ROI drawing, debug overlay and notification testing.
+- The Web UI now saves only ROI data while the detector reads fixed options from `/data/options.json`.
+
 ## [0.9.2] - 2026-07-09
 
 ### Fixed
