@@ -4,6 +4,13 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.10.1] - 2026-07-09
+
+### Fixed
+
+- Made the add-on Configuration schema tolerant of missing options on upgrades from older `schema: false` releases.
+- Quoted schema validators and notification templates to avoid YAML/Supervisor parsing ambiguity.
+
 ## [0.10.0] - 2026-07-09
 
 ### Changed

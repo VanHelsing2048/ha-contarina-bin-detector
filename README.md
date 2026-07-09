@@ -50,6 +50,6 @@ This repository uses semantic versioning. Add-on versions are defined in `contar
 
 ## Status
 
-Current release: `0.10.0`.
+Current release: `0.10.1`.
 
 The add-on is marked as experimental until it has been tested against a real RTSP stream and a few lighting conditions.

@@ -1,5 +1,5 @@
 name: Contarina Bin Detector
-version: "0.10.0"
+version: "0.10.1"
 slug: contarina_bin_detector
 description: Detects which Contarina bin color is visible inside a configured RTSP camera area and publishes a Home Assistant sensor.
 url: "https://github.com/VanHelsing2048/ha-contarina-bin-detector/tree/main/contarina-bin-detector"
@@ -51,39 +51,39 @@ options:
   notify_cooldown: 3600
   notify_unreliable: true
   notify_title: Bidone da esporre
-  notify_message: Bidone {color} da esporre oggi.
+  notify_message: "Bidone {color} da esporre oggi."
   notify_unreliable_message: "Non riesco a verificare il bidone: {reason}."
 schema:
-  rtsp_url: str
-  entity_id: str
-  device_name: str
-  collection_sensor_entity: str
+  rtsp_url: "str?"
+  entity_id: "str?"
+  device_name: "str?"
+  collection_sensor_entity: "str?"
   collection_mapping:
-    Carta: list(gray|yellow|blue)
-    VPL: list(gray|yellow|blue)
-    Umido: list(gray|yellow|blue)
-    Secco: list(gray|yellow|blue)
-  timezone: str
-  gray_hsv_lower: str
-  gray_hsv_upper: str
-  yellow_hsv_lower: str
-  yellow_hsv_upper: str
-  blue_hsv_lower: str
-  blue_hsv_upper: str
-  min_color_ratio: float
-  min_brightness: int
-  min_contrast: float
-  min_sharpness: float
-  consecutive_frames: int
-  scan_interval: int
-  monitor_days: str
-  active_time_start: str
-  active_time_end: str
-  notify_enabled: bool
-  notify_service: str
-  notify_tag: str
-  notify_cooldown: int
-  notify_unreliable: bool
-  notify_title: str
-  notify_message: str
-  notify_unreliable_message: str
+    Carta: "list(gray|yellow|blue)?"
+    VPL: "list(gray|yellow|blue)?"
+    Umido: "list(gray|yellow|blue)?"
+    Secco: "list(gray|yellow|blue)?"
+  timezone: "str?"
+  gray_hsv_lower: "str?"
+  gray_hsv_upper: "str?"
+  yellow_hsv_lower: "str?"
+  yellow_hsv_upper: "str?"
+  blue_hsv_lower: "str?"
+  blue_hsv_upper: "str?"
+  min_color_ratio: "float?"
+  min_brightness: "int?"
+  min_contrast: "float?"
+  min_sharpness: "float?"
+  consecutive_frames: "int?"
+  scan_interval: "int?"
+  monitor_days: "str?"
+  active_time_start: "str?"
+  active_time_end: "str?"
+  notify_enabled: "bool?"
+  notify_service: "str?"
+  notify_tag: "str?"
+  notify_cooldown: "int?"
+  notify_unreliable: "bool?"
+  notify_title: "str?"
+  notify_message: "str?"
+  notify_unreliable_message: "str?"

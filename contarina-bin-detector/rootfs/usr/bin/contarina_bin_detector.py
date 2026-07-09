@@ -95,7 +95,7 @@ def load_settings() -> dict[str, Any]:
         try:
             with open(OPTIONS_PATH, "r", encoding="utf-8") as options_file:
                 options = json.load(options_file)
-            settings.update(options)
+            settings.update({key: value for key, value in options.items() if value is not None})
         except Exception as error:
             log(f"Ignoring invalid options file: {error}")
 

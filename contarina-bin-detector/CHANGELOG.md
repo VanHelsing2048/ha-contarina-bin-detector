@@ -2,6 +2,13 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.10.1] - 2026-07-09
+
+### Fixed
+
+- Fixed Configuration validation errors on upgrades from older releases with empty saved options.
+- Quoted schema validators and notification templates for safer Supervisor parsing.
+
 ## [0.10.0] - 2026-07-09
 
 ### Changed
