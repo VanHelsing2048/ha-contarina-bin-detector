@@ -4,6 +4,13 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.3] - 2026-07-09
+
+### Changed
+
+- Publish GHCR images only for release tags or manual workflow runs, avoiding duplicate image builds on every push to `main`.
+- Added a Docker ignore file to keep the add-on build context small and cache-friendly.
+
 ## [0.11.2] - 2026-07-09
 
 ### Fixed

@@ -2,6 +2,13 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.3] - 2026-07-09
+
+### Changed
+
+- Publish prebuilt images only for release tags or manual workflow runs.
+- Added `.dockerignore` for smaller Docker build contexts and cleaner layer caching.
+
 ## [0.11.2] - 2026-07-09
 
 ### Fixed
