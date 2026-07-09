@@ -4,6 +4,12 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.9.1] - 2026-07-09
+
+### Fixed
+
+- Fixed add-on startup by moving the detector process into the standard s6 service directory and leaving the Home Assistant base image init process as PID 1.
+
 ## [0.9.0] - 2026-07-08
 
 ### Added

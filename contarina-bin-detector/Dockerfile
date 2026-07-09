@@ -19,8 +19,4 @@ RUN apk add --no-cache \
 
 COPY rootfs /
 
-COPY run.sh /
-
-RUN chmod a+x /run.sh /usr/bin/contarina_bin_detector.py
-
-CMD ["/run.sh"]
+RUN chmod a+x /etc/services.d/contarina/run /usr/bin/contarina_bin_detector.py

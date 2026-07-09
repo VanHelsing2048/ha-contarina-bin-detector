@@ -4,6 +4,8 @@ Home Assistant add-on that detects whether a gray, yellow or blue Contarina bin 
 
 The add-on is configured graphically from **Open Web UI**. You do not need to edit the add-on YAML options.
 
+The detector runs as a standard s6 service inside the Home Assistant base image.
+
 The sensor state is one of:
 
 - `grigio`

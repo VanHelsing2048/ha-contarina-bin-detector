@@ -2,6 +2,12 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.9.1] - 2026-07-09
+
+### Fixed
+
+- Fixed `s6-overlay-suexec: fatal: can only run as pid 1` by running the detector as an s6 service instead of overriding the container command.
+
 ## [0.9.0] - 2026-07-08
 
 ### Added

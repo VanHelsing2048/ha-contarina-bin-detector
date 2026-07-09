@@ -7,3 +7,5 @@
 Dockerfile text eol=lf
 *.py text eol=lf
 *.sh text eol=lf
+rootfs/etc/services.d/**/run text eol=lf
+contarina-bin-detector/rootfs/etc/services.d/**/run text eol=lf
