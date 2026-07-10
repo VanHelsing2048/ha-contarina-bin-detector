@@ -63,6 +63,10 @@ CONTARINA_COLOR_PRESETS = {
 }
 LATEST_FRAME: np.ndarray | None = None
 LATEST_FRAME_LOCK = Lock()
+LATEST_FRAME_CAPTURED_AT = 0.0
+LAST_CAPTURE_ERROR = ""
+BACKGROUND_CAPTURE_RUNNING = False
+BACKGROUND_CAPTURE_LOCK = Lock()
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "rtsp_url": "",
@@ -580,28 +584,75 @@ def open_stream(rtsp_url: str) -> cv2.VideoCapture:
     return capture
 
 
-def capture_snapshot(settings: dict[str, Any]) -> bytes:
-    rtsp_url = settings["rtsp_url"]
-    if not rtsp_url.strip():
+def store_latest_frame(frame: np.ndarray) -> None:
+    global LATEST_FRAME, LATEST_FRAME_CAPTURED_AT, LAST_CAPTURE_ERROR
+    with LATEST_FRAME_LOCK:
+        LATEST_FRAME = frame.copy()
+        LATEST_FRAME_CAPTURED_AT = time.time()
+        LAST_CAPTURE_ERROR = ""
+
+
+def latest_frame_copy() -> tuple[np.ndarray | None, float, str]:
+    with LATEST_FRAME_LOCK:
+        frame = None if LATEST_FRAME is None else LATEST_FRAME.copy()
+        return frame, LATEST_FRAME_CAPTURED_AT, LAST_CAPTURE_ERROR
+
+
+def capture_frame_in_background(settings: dict[str, Any]) -> None:
+    global BACKGROUND_CAPTURE_RUNNING, LAST_CAPTURE_ERROR
+    rtsp_url = str(settings.get("rtsp_url", "")).strip()
+    try:
+        frame = capture_fresh_frame(rtsp_url, float(settings.get("rtsp_warmup_seconds", 20)))
+        store_latest_frame(frame)
+        log("Background RTSP snapshot refreshed")
+    except Exception as error:
+        message = str(error)
+        with LATEST_FRAME_LOCK:
+            LAST_CAPTURE_ERROR = message
+        log(f"Background RTSP snapshot failed: {message}")
+    finally:
+        with BACKGROUND_CAPTURE_LOCK:
+            BACKGROUND_CAPTURE_RUNNING = False
+
+
+def request_background_capture(settings: dict[str, Any]) -> bool:
+    global BACKGROUND_CAPTURE_RUNNING
+    rtsp_url = str(settings.get("rtsp_url", "")).strip()
+    if not rtsp_url:
+        return False
+    with BACKGROUND_CAPTURE_LOCK:
+        if BACKGROUND_CAPTURE_RUNNING:
+            return False
+        BACKGROUND_CAPTURE_RUNNING = True
+    Thread(target=capture_frame_in_background, args=(json.loads(json.dumps(settings)),), daemon=True).start()
+    return True
+
+
+def cached_frame_for_ui(settings: dict[str, Any]) -> np.ndarray:
+    rtsp_url = str(settings.get("rtsp_url", "")).strip()
+    if not rtsp_url:
         raise RuntimeError("Configure the RTSP URL first.")
 
-    frame = capture_fresh_frame(rtsp_url.strip(), float(settings.get("rtsp_warmup_seconds", 20)))
-    with LATEST_FRAME_LOCK:
-        global LATEST_FRAME
-        LATEST_FRAME = frame.copy()
+    frame, captured_at, last_error = latest_frame_copy()
+    request_background_capture(settings)
+    if frame is None:
+        message = "Snapshot is not ready yet. RTSP capture is running in the background; retry in a few seconds."
+        if last_error:
+            message = f"{message} Last error: {last_error}"
+        raise RuntimeError(message)
+
+    age_seconds = max(0, int(time.time() - captured_at)) if captured_at else 0
+    log(f"Serving cached snapshot to Web UI, age {age_seconds}s")
+    return frame
+
+
+def capture_snapshot(settings: dict[str, Any]) -> bytes:
+    frame = cached_frame_for_ui(settings)
     return encode_snapshot(frame)
 
 
 def capture_debug_snapshot(settings: dict[str, Any]) -> bytes:
-    rtsp_url = settings["rtsp_url"].strip()
-    if not rtsp_url:
-        raise RuntimeError("Configure the RTSP URL first.")
-
-    frame = capture_fresh_frame(rtsp_url, float(settings.get("rtsp_warmup_seconds", 20)))
-    with LATEST_FRAME_LOCK:
-        global LATEST_FRAME
-        LATEST_FRAME = frame.copy()
-
+    frame = cached_frame_for_ui(settings)
     state, candidate_color, _, _, collection, ratios, quality, scheduled = analyze_frame(
         frame,
         settings,
@@ -766,7 +817,7 @@ def error_image(message: str) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.11.9"
+    server_version = "ContarinaWebUi/0.11.11"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
@@ -1212,8 +1263,6 @@ def analyze_frame(
 
 
 def main() -> int:
-    global LATEST_FRAME
-
     current_candidate = NONE_STATE
     hits = 0
     last_publish_signature: tuple[Any, ...] | None = None
@@ -1239,8 +1288,7 @@ def main() -> int:
             continue
 
 
-        with LATEST_FRAME_LOCK:
-            LATEST_FRAME = frame.copy()
+        store_latest_frame(frame)
 
         state, candidate_color, current_candidate, hits, collection, ratios, quality, scheduled = analyze_frame(
             frame,
@@ -1257,9 +1305,12 @@ def main() -> int:
             quality["reason"],
         )
         if publish_signature != last_publish_signature:
-            publish_state(settings, state, candidate_color, ratios, scheduled, collection, quality)
-            last_publish_signature = publish_signature
-            log(f"Published {settings['entity_id']}={state} ratios={ratios} scheduled={scheduled} collection={collection}")
+            try:
+                publish_state(settings, state, candidate_color, ratios, scheduled, collection, quality)
+                last_publish_signature = publish_signature
+                log(f"Published {settings['entity_id']}={state} ratios={ratios} scheduled={scheduled} collection={collection}")
+            except Exception as error:
+                log(f"Could not publish state to Home Assistant: {error}")
         else:
             log(f"Scanned candidate={candidate_color} state={state} ratios={ratios} scheduled={scheduled} collection={collection}")
 

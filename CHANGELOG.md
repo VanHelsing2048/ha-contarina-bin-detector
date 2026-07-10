@@ -4,6 +4,14 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.11] - 2026-07-10
+
+### Fixed
+
+- Fixed Web UI snapshot refresh through Home Assistant Ingress by serving the latest cached frame instead of blocking the HTTP request on a live RTSP capture.
+- Kept the detector loop alive if publishing the sensor state to Home Assistant fails temporarily.
+- Removed an empty service directory that caused noisy s6 service warnings.
+
 ## [0.11.10] - 2026-07-10
 
 ### Fixed

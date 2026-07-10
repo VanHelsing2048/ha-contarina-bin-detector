@@ -2,6 +2,14 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.11] - 2026-07-10
+
+### Fixed
+
+- Fixed ROI Web UI snapshot refresh behind Home Assistant Ingress by returning cached frames quickly while RTSP capture runs in the background.
+- Kept the add-on running if Home Assistant sensor publishing is temporarily unavailable.
+- Removed a stray empty s6 service directory from the image.
+
 ## [0.11.10] - 2026-07-10
 
 ### Fixed
