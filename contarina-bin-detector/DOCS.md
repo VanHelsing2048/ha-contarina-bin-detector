@@ -32,6 +32,8 @@ The add-on does not continuously analyze the RTSP stream. On each scan it:
 
 The default scan interval is 300 seconds. This is intended for low-frequency checks such as verifying whether the bin has been put out.
 
+Some RTSP cameras need a few seconds before returning the first frame. Use `rtsp_warmup_seconds` in the add-on Configuration tab to control how long the add-on waits before declaring the snapshot unavailable. The default is 20 seconds.
+
 ## Prebuilt Image
 
 From version `0.11.0`, the add-on uses a prebuilt multi-architecture image from GitHub Container Registry:

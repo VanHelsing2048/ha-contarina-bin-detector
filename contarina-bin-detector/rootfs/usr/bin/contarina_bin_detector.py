@@ -86,6 +86,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "min_sharpness": 20,
     "consecutive_frames": 1,
     "scan_interval": 300,
+    "rtsp_warmup_seconds": 20,
     "monitor_days": ["mon"],
     "active_time_start": "00:00",
     "active_time_end": "23:59",
@@ -135,6 +136,7 @@ def load_settings() -> dict[str, Any]:
     settings["min_sharpness"] = max(0, float(settings.get("min_sharpness", 20)))
     settings["consecutive_frames"] = max(1, int(settings.get("consecutive_frames", 1)))
     settings["scan_interval"] = max(1, int(settings.get("scan_interval", 300)))
+    settings["rtsp_warmup_seconds"] = max(1, int(settings.get("rtsp_warmup_seconds", 20)))
     settings["notify_enabled"] = bool(settings.get("notify_enabled", False))
     settings["notify_unreliable"] = bool(settings.get("notify_unreliable", True))
     settings["notify_cooldown"] = max(60, int(settings.get("notify_cooldown", 3600)))
@@ -557,11 +559,12 @@ def open_stream(rtsp_url: str) -> cv2.VideoCapture:
     return capture
 
 
-def capture_snapshot(rtsp_url: str) -> bytes:
+def capture_snapshot(settings: dict[str, Any]) -> bytes:
+    rtsp_url = settings["rtsp_url"]
     if not rtsp_url.strip():
         raise RuntimeError("Configure the RTSP URL first.")
 
-    frame = capture_fresh_frame(rtsp_url.strip())
+    frame = capture_fresh_frame(rtsp_url.strip(), float(settings.get("rtsp_warmup_seconds", 20)))
     with LATEST_FRAME_LOCK:
         global LATEST_FRAME
         LATEST_FRAME = frame.copy()
@@ -573,7 +576,7 @@ def capture_debug_snapshot(settings: dict[str, Any]) -> bytes:
     if not rtsp_url:
         raise RuntimeError("Configure the RTSP URL first.")
 
-    frame = capture_fresh_frame(rtsp_url)
+    frame = capture_fresh_frame(rtsp_url, float(settings.get("rtsp_warmup_seconds", 20)))
     with LATEST_FRAME_LOCK:
         global LATEST_FRAME
         LATEST_FRAME = frame.copy()
@@ -588,20 +591,25 @@ def capture_debug_snapshot(settings: dict[str, Any]) -> bytes:
     return encode_snapshot(frame)
 
 
-def capture_fresh_frame(rtsp_url: str, discard_frames: int = 5) -> np.ndarray:
+def capture_fresh_frame(rtsp_url: str, warmup_seconds: float = 20.0) -> np.ndarray:
     capture = open_stream(rtsp_url)
     try:
         if not capture.isOpened():
             raise RuntimeError("RTSP stream could not be opened by OpenCV")
 
         frame = None
-        for _ in range(max(1, discard_frames)):
+        attempts = 0
+        deadline = time.monotonic() + max(1.0, warmup_seconds)
+        while time.monotonic() < deadline:
+            attempts += 1
             ok, candidate = capture.read()
             if ok and candidate is not None:
                 frame = candidate
+                break
+            time.sleep(0.2)
 
         if frame is None:
-            raise RuntimeError("RTSP stream opened but no frame could be read")
+            raise RuntimeError(f"RTSP stream opened but no frame could be read within {warmup_seconds:.0f}s ({attempts} attempts)")
 
         return frame
     finally:
@@ -750,7 +758,7 @@ class WebUiHandler(BaseHTTPRequestHandler):
 
     def send_snapshot(self) -> None:
         try:
-            data = capture_snapshot(load_settings()["rtsp_url"])
+            data = capture_snapshot(load_settings())
         except Exception as error:
             message = str(error)
             self.send_image(error_image(message), "image/svg+xml", message)
@@ -831,6 +839,7 @@ def web_ui_html() -> str:
     let settings = null;
     let drawing = false;
     let start = null;
+    let lastSnapshotError = "";
 
     function setStatus(message) {
       statusEl.innerHTML = message;
@@ -857,6 +866,7 @@ def web_ui_html() -> str:
         <div>Collection sensor: <code>${collection}</code></div>
         <div>Schedule: <code>${settings.monitor_days.join(",") || "all"} ${settings.active_time_start}-${settings.active_time_end}</code></div>
         <div>Scan interval: <code>${settings.scan_interval}s</code></div>
+        <div>RTSP warmup: <code>${settings.rtsp_warmup_seconds}s</code></div>
         <div>Notifications: <code>${notify}</code></div>
       `;
       draw();
@@ -940,6 +950,7 @@ def web_ui_html() -> str:
       const url = `snapshot?t=${Date.now()}`;
       const response = await fetch(url);
       const error = response.headers.get("X-Contarina-Error");
+      lastSnapshotError = error || "";
       img.src = URL.createObjectURL(await response.blob());
       if (error) {
         setStatus(`Snapshot unavailable: <code>${escapeHtml(error)}</code>`);
@@ -973,13 +984,20 @@ def web_ui_html() -> str:
     }
 
     img.addEventListener("load", syncCanvas);
-    img.addEventListener("error", () => setStatus("Snapshot unavailable. Check the RTSP URL in the add-on Configuration tab."));
+    img.addEventListener("error", () => {
+      if (lastSnapshotError) {
+        setStatus(`Snapshot unavailable: <code>${escapeHtml(lastSnapshotError)}</code>`);
+      } else {
+        setStatus("Snapshot unavailable. Check the RTSP URL in the add-on Configuration tab.");
+      }
+    });
     window.addEventListener("resize", syncCanvas);
     document.getElementById("refresh").addEventListener("click", refreshSnapshot);
     document.getElementById("debug").addEventListener("click", async () => {
       setStatus("Loading debug snapshot...");
       const response = await fetch(`debug-snapshot?t=${Date.now()}`);
       const error = response.headers.get("X-Contarina-Error");
+      lastSnapshotError = error || "";
       img.src = URL.createObjectURL(await response.blob());
       if (error) {
         setStatus(`Debug snapshot unavailable: <code>${escapeHtml(error)}</code>`);

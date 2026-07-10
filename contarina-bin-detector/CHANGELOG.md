@@ -2,6 +2,17 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.6] - 2026-07-10
+
+### Added
+
+- Added `rtsp_warmup_seconds` for cameras that need more time before returning the first RTSP frame.
+
+### Fixed
+
+- Snapshot capture now waits up to the configured warmup time before failing.
+- The Web UI keeps the detailed RTSP error visible if the placeholder image cannot be rendered.
+
 ## [0.11.5] - 2026-07-10
 
 ### Fixed

@@ -58,6 +58,8 @@ The **Refresh frame** button in the Web UI also captures a fresh frame on demand
 
 The **Debug overlay** button captures a fresh frame and draws the ROI plus diagnostic text directly on the snapshot. It is useful for tuning color thresholds, brightness, contrast and sharpness.
 
+If your camera needs time before it returns a frame, increase `rtsp_warmup_seconds` in the add-on Configuration tab. The default is 20 seconds.
+
 ## Prebuilt Images
 
 From version `0.11.0`, Home Assistant pulls the add-on image from GitHub Container Registry instead of building it locally on the device.

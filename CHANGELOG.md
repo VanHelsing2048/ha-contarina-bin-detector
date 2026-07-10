@@ -4,6 +4,17 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.6] - 2026-07-10
+
+### Added
+
+- Added `rtsp_warmup_seconds` to allow slower RTSP cameras to deliver their first frame.
+
+### Fixed
+
+- Snapshot capture now waits for a frame until the warmup timeout instead of giving up after only a few reads.
+- The Web UI now preserves the detailed RTSP error instead of replacing it with a generic image-load message.
+
 ## [0.11.5] - 2026-07-10
 
 ### Fixed
