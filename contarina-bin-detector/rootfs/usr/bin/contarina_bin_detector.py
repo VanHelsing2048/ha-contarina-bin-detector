@@ -652,6 +652,28 @@ def encode_snapshot(frame: np.ndarray) -> bytes:
     return encoded.tobytes()
 
 
+def xml_escape(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
+
+
+def error_image(message: str) -> bytes:
+    safe_message = xml_escape(message)
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+  <rect width="960" height="540" fill="#101418"/>
+  <rect x="32" y="32" width="896" height="476" fill="#172027" stroke="#40515f" stroke-width="2"/>
+  <text x="64" y="104" fill="#eef2f4" font-family="Arial, sans-serif" font-size="34" font-weight="700">Snapshot unavailable</text>
+  <text x="64" y="158" fill="#f5c542" font-family="Arial, sans-serif" font-size="22">{safe_message}</text>
+  <text x="64" y="220" fill="#bcc8cf" font-family="Arial, sans-serif" font-size="18">Check the add-on Configuration tab and the RTSP camera logs.</text>
+</svg>"""
+    return svg.encode("utf-8")
+
+
 class WebUiHandler(BaseHTTPRequestHandler):
     server_version = "ContarinaWebUi/0.11.4"
 
@@ -716,10 +738,12 @@ class WebUiHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def send_text(self, status: HTTPStatus, message: str) -> None:
-        data = message.encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
+    def send_image(self, data: bytes, content_type: str, error: str = "") -> None:
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store")
+        if error:
+            self.send_header("X-Contarina-Error", error)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -728,29 +752,21 @@ class WebUiHandler(BaseHTTPRequestHandler):
         try:
             data = capture_snapshot(load_settings()["rtsp_url"])
         except Exception as error:
-            self.send_text(HTTPStatus.BAD_GATEWAY, str(error))
+            message = str(error)
+            self.send_image(error_image(message), "image/svg+xml", message)
             return
 
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "image/jpeg")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        self.send_image(data, "image/jpeg")
 
     def send_debug_snapshot(self) -> None:
         try:
             data = capture_debug_snapshot(load_settings())
         except Exception as error:
-            self.send_text(HTTPStatus.BAD_GATEWAY, str(error))
+            message = str(error)
+            self.send_image(error_image(message), "image/svg+xml", message)
             return
 
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "image/jpeg")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        self.send_image(data, "image/jpeg")
 
 
 def web_ui_html() -> str:
@@ -923,12 +939,11 @@ def web_ui_html() -> str:
       setStatus("Loading snapshot...");
       const url = `snapshot?t=${Date.now()}`;
       const response = await fetch(url);
-      if (!response.ok) {
-        const message = await response.text();
-        setStatus(`Snapshot unavailable: <code>${escapeHtml(message)}</code>`);
-        return;
-      }
+      const error = response.headers.get("X-Contarina-Error");
       img.src = URL.createObjectURL(await response.blob());
+      if (error) {
+        setStatus(`Snapshot unavailable: <code>${escapeHtml(error)}</code>`);
+      }
     }
 
     async function saveSettings() {
@@ -964,12 +979,11 @@ def web_ui_html() -> str:
     document.getElementById("debug").addEventListener("click", async () => {
       setStatus("Loading debug snapshot...");
       const response = await fetch(`debug-snapshot?t=${Date.now()}`);
-      if (!response.ok) {
-        const message = await response.text();
-        setStatus(`Debug snapshot unavailable: <code>${escapeHtml(message)}</code>`);
-        return;
-      }
+      const error = response.headers.get("X-Contarina-Error");
       img.src = URL.createObjectURL(await response.blob());
+      if (error) {
+        setStatus(`Debug snapshot unavailable: <code>${escapeHtml(error)}</code>`);
+      }
     });
     document.getElementById("save").addEventListener("click", saveSettings);
     document.getElementById("test_notification").addEventListener("click", testNotification);

@@ -2,6 +2,13 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.5] - 2026-07-10
+
+### Fixed
+
+- Fixed `Refresh frame` showing `502 Bad Gateway` when RTSP capture fails.
+- Snapshot failures now render a diagnostic placeholder image and show the camera error in the Web UI.
+
 ## [0.11.4] - 2026-07-10
 
 ### Fixed

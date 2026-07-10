@@ -4,6 +4,13 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.5] - 2026-07-10
+
+### Fixed
+
+- Prevented Home Assistant Ingress from showing `502 Bad Gateway` on snapshot failures.
+- Snapshot and debug endpoints now return a diagnostic placeholder image with the RTSP/OpenCV error.
+
 ## [0.11.4] - 2026-07-10
 
 ### Fixed
