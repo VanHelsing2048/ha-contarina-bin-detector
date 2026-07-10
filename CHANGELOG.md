@@ -4,6 +4,18 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.7] - 2026-07-10
+
+### Changed
+
+- Use `ffmpeg` as the primary RTSP frame capture path and keep OpenCV as fallback.
+- Add the `ffmpeg` package to prebuilt add-on images.
+
+### Fixed
+
+- Improved compatibility with H.264 RTSP cameras that answer DESCRIBE correctly but fail to provide frames through OpenCV capture.
+- Redact RTSP credentials from capture errors shown in logs or the Web UI.
+
 ## [0.11.6] - 2026-07-10
 
 ### Added

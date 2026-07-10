@@ -34,6 +34,8 @@ The default scan interval is 300 seconds. This is intended for low-frequency che
 
 Some RTSP cameras need a few seconds before returning the first frame. Use `rtsp_warmup_seconds` in the add-on Configuration tab to control how long the add-on waits before declaring the snapshot unavailable. The default is 20 seconds.
 
+The add-on captures RTSP frames with `ffmpeg` first and falls back to OpenCV if needed. This improves compatibility with H.264 streams that are valid RTSP but do not open reliably through OpenCV.
+
 ## Prebuilt Image
 
 From version `0.11.0`, the add-on uses a prebuilt multi-architecture image from GitHub Container Registry:

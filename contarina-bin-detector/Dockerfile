@@ -13,6 +13,7 @@ LABEL \
 
 RUN apk add --no-cache \
     python3 \
+    ffmpeg \
     py3-numpy \
     py3-opencv \
     py3-requests \

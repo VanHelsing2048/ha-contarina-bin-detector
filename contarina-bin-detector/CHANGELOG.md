@@ -2,6 +2,18 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.7] - 2026-07-10
+
+### Changed
+
+- Use `ffmpeg` first for RTSP snapshot capture, with OpenCV as fallback.
+- Include `ffmpeg` in the add-on image.
+
+### Fixed
+
+- Improved compatibility with H.264 RTSP cameras that OpenCV cannot open reliably.
+- Redacted RTSP credentials from capture errors.
+
 ## [0.11.6] - 2026-07-10
 
 ### Added

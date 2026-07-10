@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, time as day_time
@@ -11,6 +12,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Lock, Thread
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 
@@ -103,6 +105,24 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 def log(message: str) -> None:
     print(message, flush=True)
+
+
+def redact_rtsp_url(value: str) -> str:
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return value
+    if parsed.scheme.lower() != "rtsp" or "@" not in parsed.netloc:
+        return value
+    host = parsed.hostname or ""
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+    return urlunsplit((parsed.scheme, f"***:***@{host}", parsed.path, parsed.query, parsed.fragment))
+
+
+def sanitize_capture_error(message: str, rtsp_url: str) -> str:
+    redacted = redact_rtsp_url(rtsp_url)
+    return message.replace(rtsp_url, redacted)
 
 
 def load_settings() -> dict[str, Any]:
@@ -592,6 +612,68 @@ def capture_debug_snapshot(settings: dict[str, Any]) -> bytes:
 
 
 def capture_fresh_frame(rtsp_url: str, warmup_seconds: float = 20.0) -> np.ndarray:
+    try:
+        return capture_fresh_frame_with_ffmpeg(rtsp_url, warmup_seconds)
+    except Exception as ffmpeg_error:
+        ffmpeg_message = sanitize_capture_error(str(ffmpeg_error), rtsp_url)
+        log(f"FFmpeg RTSP capture failed, trying OpenCV fallback: {ffmpeg_message}")
+        try:
+            return capture_fresh_frame_with_opencv(rtsp_url, warmup_seconds)
+        except Exception as opencv_error:
+            opencv_message = sanitize_capture_error(str(opencv_error), rtsp_url)
+            raise RuntimeError(f"FFmpeg failed: {ffmpeg_message}; OpenCV failed: {opencv_message}") from opencv_error
+
+
+def capture_fresh_frame_with_ffmpeg(rtsp_url: str, warmup_seconds: float) -> np.ndarray:
+    timeout = max(5.0, warmup_seconds + 5.0)
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-rtsp_transport",
+        "tcp",
+        "-rw_timeout",
+        str(int(max(1.0, warmup_seconds) * 1_000_000)),
+        "-analyzeduration",
+        "5000000",
+        "-probesize",
+        "1000000",
+        "-i",
+        rtsp_url,
+        "-frames:v",
+        "1",
+        "-an",
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        "mjpeg",
+        "pipe:1",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(f"ffmpeg timed out after {timeout:.0f}s") from error
+    if result.returncode != 0:
+        error = sanitize_capture_error(result.stderr.decode("utf-8", errors="replace").strip(), rtsp_url)
+        raise RuntimeError(error or f"ffmpeg exited with status {result.returncode}")
+    if not result.stdout:
+        raise RuntimeError("ffmpeg did not return an image")
+
+    image = np.frombuffer(result.stdout, dtype=np.uint8)
+    frame = cv2.imdecode(image, cv2.IMREAD_COLOR)
+    if frame is None:
+        raise RuntimeError("ffmpeg returned an image that OpenCV could not decode")
+    return frame
+
+
+def capture_fresh_frame_with_opencv(rtsp_url: str, warmup_seconds: float) -> np.ndarray:
     capture = open_stream(rtsp_url)
     try:
         if not capture.isOpened():

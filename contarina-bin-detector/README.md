@@ -60,6 +60,8 @@ The **Debug overlay** button captures a fresh frame and draws the ROI plus diagn
 
 If your camera needs time before it returns a frame, increase `rtsp_warmup_seconds` in the add-on Configuration tab. The default is 20 seconds.
 
+Snapshots are captured with `ffmpeg` first, with OpenCV as a fallback. This is more reliable for H.264 RTSP cameras.
+
 ## Prebuilt Images
 
 From version `0.11.0`, Home Assistant pulls the add-on image from GitHub Container Registry instead of building it locally on the device.
