@@ -2,6 +2,12 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.10] - 2026-07-10
+
+### Fixed
+
+- Fixed FFmpeg snapshot capture by using the RTSP timeout option supported by the add-on image.
+
 ## [0.11.9] - 2026-07-10
 
 ### Fixed

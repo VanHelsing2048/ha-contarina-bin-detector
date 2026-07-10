@@ -4,6 +4,12 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.10] - 2026-07-10
+
+### Fixed
+
+- Fixed FFmpeg RTSP capture by using the supported `-timeout` option instead of unsupported timeout flags.
+
 ## [0.11.9] - 2026-07-10
 
 ### Fixed

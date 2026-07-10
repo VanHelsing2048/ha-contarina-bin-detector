@@ -634,7 +634,7 @@ def capture_fresh_frame_with_ffmpeg(rtsp_url: str, warmup_seconds: float) -> np.
         "error",
         "-rtsp_transport",
         "tcp",
-        "-rw_timeout",
+        "-timeout",
         str(int(max(1.0, warmup_seconds) * 1_000_000)),
         "-analyzeduration",
         "5000000",
@@ -990,6 +990,18 @@ def web_ui_html() -> str:
       draw();
     }
 
+    async function fetchJsonPayload(url) {
+      const response = await fetch(url);
+      const text = await response.text();
+      try {
+        return JSON.parse(text);
+      } catch (error) {
+        const contentType = response.headers.get("Content-Type") || "unknown";
+        const preview = text.slice(0, 500) || "<empty response>";
+        throw new Error(`Invalid JSON from ${url}. HTTP ${response.status}. Content-Type: ${contentType}. Body: ${preview}`);
+      }
+    }
+
     function syncCanvas() {
       canvas.width = img.clientWidth;
       canvas.height = img.clientHeight;
@@ -1069,8 +1081,7 @@ def web_ui_html() -> str:
       debugButton.disabled = true;
       setStatus("Loading snapshot...");
       try {
-        const response = await fetch(`api/snapshot?t=${Date.now()}`);
-        const result = await response.json();
+        const result = await fetchJsonPayload(`api/snapshot?t=${Date.now()}`);
         if (requestId !== snapshotRequestId) return;
         lastSnapshotError = result.error || "";
         if (result.ok) {
@@ -1131,8 +1142,7 @@ def web_ui_html() -> str:
       debugButton.disabled = true;
       setStatus("Loading debug snapshot...");
       try {
-        const response = await fetch(`api/debug-snapshot?t=${Date.now()}`);
-        const result = await response.json();
+        const result = await fetchJsonPayload(`api/debug-snapshot?t=${Date.now()}`);
         if (requestId !== snapshotRequestId) return;
         lastSnapshotError = result.error || "";
         if (result.ok) {
