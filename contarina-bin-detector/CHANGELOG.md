@@ -2,6 +2,14 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.4] - 2026-07-10
+
+### Fixed
+
+- Made the Web UI become ready faster by loading OpenCV only when snapshots or scans need it.
+- Added clearer RTSP snapshot errors and an OpenCV backend fallback.
+- Added a Web UI options-file diagnostic to confirm whether Home Assistant Configuration values are being read.
+
 ## [0.11.3] - 2026-07-09
 
 ### Changed

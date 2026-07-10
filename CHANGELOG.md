@@ -4,6 +4,14 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.4] - 2026-07-10
+
+### Fixed
+
+- Improved Web UI readiness by lazy-loading OpenCV only when camera capture is needed.
+- Improved RTSP diagnostics with clearer snapshot errors and a fallback OpenCV capture backend.
+- Added Web UI diagnostics for whether Home Assistant options are loaded.
+
 ## [0.11.3] - 2026-07-09
 
 ### Changed

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
+import importlib
 import json
 import os
 import sys
@@ -10,9 +13,21 @@ from threading import Lock, Thread
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import cv2
-import numpy as np
-import requests
+
+class LazyModule:
+    def __init__(self, module_name: str) -> None:
+        self.module_name = module_name
+        self.module: Any = None
+
+    def __getattr__(self, name: str) -> Any:
+        if self.module is None:
+            self.module = importlib.import_module(self.module_name)
+        return getattr(self.module, name)
+
+
+cv2 = LazyModule("cv2")
+np = LazyModule("numpy")
+requests = LazyModule("requests")
 
 
 OPTIONS_PATH = "/data/options.json"
@@ -123,6 +138,11 @@ def load_settings() -> dict[str, Any]:
     settings["notify_enabled"] = bool(settings.get("notify_enabled", False))
     settings["notify_unreliable"] = bool(settings.get("notify_unreliable", True))
     settings["notify_cooldown"] = max(60, int(settings.get("notify_cooldown", 3600)))
+    settings["_diagnostics"] = {
+        "options_file": os.path.exists(OPTIONS_PATH),
+        "settings_file": os.path.exists(SETTINGS_PATH),
+        "rtsp_configured": bool(str(settings.get("rtsp_url", "")).strip()),
+    }
     return settings
 
 
@@ -527,16 +547,21 @@ def manage_mobile_notification(
 
 
 def open_stream(rtsp_url: str) -> cv2.VideoCapture:
+    rtsp_url = rtsp_url.strip()
+    os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|stimeout;10000000")
     capture = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+    if not capture.isOpened():
+        capture.release()
+        capture = cv2.VideoCapture(rtsp_url)
     capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     return capture
 
 
 def capture_snapshot(rtsp_url: str) -> bytes:
-    if not rtsp_url:
+    if not rtsp_url.strip():
         raise RuntimeError("Configure the RTSP URL first.")
 
-    frame = capture_fresh_frame(rtsp_url)
+    frame = capture_fresh_frame(rtsp_url.strip())
     with LATEST_FRAME_LOCK:
         global LATEST_FRAME
         LATEST_FRAME = frame.copy()
@@ -567,7 +592,7 @@ def capture_fresh_frame(rtsp_url: str, discard_frames: int = 5) -> np.ndarray:
     capture = open_stream(rtsp_url)
     try:
         if not capture.isOpened():
-            raise RuntimeError("RTSP stream is not open")
+            raise RuntimeError("RTSP stream could not be opened by OpenCV")
 
         frame = None
         for _ in range(max(1, discard_frames)):
@@ -576,7 +601,7 @@ def capture_fresh_frame(rtsp_url: str, discard_frames: int = 5) -> np.ndarray:
                 frame = candidate
 
         if frame is None:
-            raise RuntimeError("Could not read RTSP frame")
+            raise RuntimeError("RTSP stream opened but no frame could be read")
 
         return frame
     finally:
@@ -628,7 +653,7 @@ def encode_snapshot(frame: np.ndarray) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.10"
+    server_version = "ContarinaWebUi/0.11.4"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
@@ -691,11 +716,19 @@ class WebUiHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def send_text(self, status: HTTPStatus, message: str) -> None:
+        data = message.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def send_snapshot(self) -> None:
         try:
             data = capture_snapshot(load_settings()["rtsp_url"])
         except Exception as error:
-            self.send_error(HTTPStatus.BAD_GATEWAY, str(error))
+            self.send_text(HTTPStatus.BAD_GATEWAY, str(error))
             return
 
         self.send_response(HTTPStatus.OK)
@@ -709,7 +742,7 @@ class WebUiHandler(BaseHTTPRequestHandler):
         try:
             data = capture_debug_snapshot(load_settings())
         except Exception as error:
-            self.send_error(HTTPStatus.BAD_GATEWAY, str(error))
+            self.send_text(HTTPStatus.BAD_GATEWAY, str(error))
             return
 
         self.send_response(HTTPStatus.OK)
@@ -787,12 +820,24 @@ def web_ui_html() -> str:
       statusEl.innerHTML = message;
     }
 
+    function escapeHtml(value) {
+      return value.replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
     function renderSettings() {
       const notify = settings.notify_enabled ? settings.notify_service || "-" : "disabled";
       const collection = settings.collection_sensor_entity || "not configured";
+      const diagnostics = settings._diagnostics || {};
       summaryEl.innerHTML = `
         <div>Sensor: <code>${settings.entity_id}</code></div>
         <div>RTSP: <code>${settings.rtsp_url ? "configured" : "missing"}</code></div>
+        <div>Options file: <code>${diagnostics.options_file ? "loaded" : "missing"}</code></div>
         <div>Collection sensor: <code>${collection}</code></div>
         <div>Schedule: <code>${settings.monitor_days.join(",") || "all"} ${settings.active_time_start}-${settings.active_time_end}</code></div>
         <div>Scan interval: <code>${settings.scan_interval}s</code></div>
@@ -876,7 +921,14 @@ def web_ui_html() -> str:
 
     async function refreshSnapshot() {
       setStatus("Loading snapshot...");
-      img.src = `snapshot?t=${Date.now()}`;
+      const url = `snapshot?t=${Date.now()}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        const message = await response.text();
+        setStatus(`Snapshot unavailable: <code>${escapeHtml(message)}</code>`);
+        return;
+      }
+      img.src = URL.createObjectURL(await response.blob());
     }
 
     async function saveSettings() {
@@ -909,9 +961,15 @@ def web_ui_html() -> str:
     img.addEventListener("error", () => setStatus("Snapshot unavailable. Check the RTSP URL in the add-on Configuration tab."));
     window.addEventListener("resize", syncCanvas);
     document.getElementById("refresh").addEventListener("click", refreshSnapshot);
-    document.getElementById("debug").addEventListener("click", () => {
+    document.getElementById("debug").addEventListener("click", async () => {
       setStatus("Loading debug snapshot...");
-      img.src = `debug-snapshot?t=${Date.now()}`;
+      const response = await fetch(`debug-snapshot?t=${Date.now()}`);
+      if (!response.ok) {
+        const message = await response.text();
+        setStatus(`Debug snapshot unavailable: <code>${escapeHtml(message)}</code>`);
+        return;
+      }
+      img.src = URL.createObjectURL(await response.blob());
     });
     document.getElementById("save").addEventListener("click", saveSettings);
     document.getElementById("test_notification").addEventListener("click", testNotification);
