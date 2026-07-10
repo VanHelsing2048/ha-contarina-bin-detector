@@ -766,7 +766,7 @@ def error_image(message: str) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.11.8"
+    server_version = "ContarinaWebUi/0.11.9"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
@@ -951,10 +951,13 @@ def web_ui_html() -> str:
     const ctx = canvas.getContext("2d");
     const statusEl = document.getElementById("status");
     const summaryEl = document.getElementById("summary");
+    const refreshButton = document.getElementById("refresh");
+    const debugButton = document.getElementById("debug");
     let settings = null;
     let drawing = false;
     let start = null;
     let lastSnapshotError = "";
+    let snapshotRequestId = 0;
 
     function setStatus(message) {
       statusEl.innerHTML = message;
@@ -1061,13 +1064,30 @@ def web_ui_html() -> str:
     }
 
     async function refreshSnapshot() {
+      const requestId = ++snapshotRequestId;
+      refreshButton.disabled = true;
+      debugButton.disabled = true;
       setStatus("Loading snapshot...");
-      const response = await fetch(`api/snapshot?t=${Date.now()}`);
-      const result = await response.json();
-      lastSnapshotError = result.error || "";
-      img.src = `data:${result.content_type};base64,${result.image}`;
-      if (!result.ok) {
-        setStatus(`Snapshot unavailable: <code>${escapeHtml(result.error)}</code>`);
+      try {
+        const response = await fetch(`api/snapshot?t=${Date.now()}`);
+        const result = await response.json();
+        if (requestId !== snapshotRequestId) return;
+        lastSnapshotError = result.error || "";
+        if (result.ok) {
+          img.src = `data:${result.content_type};base64,${result.image}`;
+        } else {
+          setStatus(`Snapshot unavailable: <code>${escapeHtml(result.error)}</code>`);
+        }
+      } catch (error) {
+        if (requestId === snapshotRequestId) {
+          lastSnapshotError = error.message;
+          setStatus(`Snapshot unavailable: <code>${escapeHtml(error.message)}</code>`);
+        }
+      } finally {
+        if (requestId === snapshotRequestId) {
+          refreshButton.disabled = false;
+          debugButton.disabled = false;
+        }
       }
     }
 
@@ -1101,20 +1121,35 @@ def web_ui_html() -> str:
     img.addEventListener("error", () => {
       if (lastSnapshotError) {
         setStatus(`Snapshot unavailable: <code>${escapeHtml(lastSnapshotError)}</code>`);
-      } else {
-        setStatus("Snapshot unavailable. Check the RTSP URL in the add-on Configuration tab.");
       }
     });
     window.addEventListener("resize", syncCanvas);
-    document.getElementById("refresh").addEventListener("click", refreshSnapshot);
-    document.getElementById("debug").addEventListener("click", async () => {
+    refreshButton.addEventListener("click", refreshSnapshot);
+    debugButton.addEventListener("click", async () => {
+      const requestId = ++snapshotRequestId;
+      refreshButton.disabled = true;
+      debugButton.disabled = true;
       setStatus("Loading debug snapshot...");
-      const response = await fetch(`api/debug-snapshot?t=${Date.now()}`);
-      const result = await response.json();
-      lastSnapshotError = result.error || "";
-      img.src = `data:${result.content_type};base64,${result.image}`;
-      if (!result.ok) {
-        setStatus(`Debug snapshot unavailable: <code>${escapeHtml(result.error)}</code>`);
+      try {
+        const response = await fetch(`api/debug-snapshot?t=${Date.now()}`);
+        const result = await response.json();
+        if (requestId !== snapshotRequestId) return;
+        lastSnapshotError = result.error || "";
+        if (result.ok) {
+          img.src = `data:${result.content_type};base64,${result.image}`;
+        } else {
+          setStatus(`Debug snapshot unavailable: <code>${escapeHtml(result.error)}</code>`);
+        }
+      } catch (error) {
+        if (requestId === snapshotRequestId) {
+          lastSnapshotError = error.message;
+          setStatus(`Debug snapshot unavailable: <code>${escapeHtml(error.message)}</code>`);
+        }
+      } finally {
+        if (requestId === snapshotRequestId) {
+          refreshButton.disabled = false;
+          debugButton.disabled = false;
+        }
       }
     });
     document.getElementById("save").addEventListener("click", saveSettings);

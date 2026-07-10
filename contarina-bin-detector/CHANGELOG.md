@@ -2,6 +2,13 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.9] - 2026-07-10
+
+### Fixed
+
+- Fixed repeated **Refresh frame** clicks causing stale failed snapshot responses to replace a working frame.
+- The Web UI now keeps the last valid frame visible when a later snapshot attempt fails.
+
 ## [0.11.8] - 2026-07-10
 
 ### Fixed

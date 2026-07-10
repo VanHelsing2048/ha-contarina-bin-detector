@@ -4,6 +4,13 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.9] - 2026-07-10
+
+### Fixed
+
+- Prevented older or failed snapshot refresh requests from overwriting a newer successful frame in the Web UI.
+- Disabled snapshot buttons while a capture is in progress and kept the last valid frame visible when later captures fail.
+
 ## [0.11.8] - 2026-07-10
 
 ### Fixed
