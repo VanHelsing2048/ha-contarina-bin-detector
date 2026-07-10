@@ -2,6 +2,13 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.8] - 2026-07-10
+
+### Fixed
+
+- Changed Web UI snapshot loading to use JSON image payloads instead of direct image URLs.
+- Preserved detailed RTSP errors in the UI instead of falling back to the generic RTSP URL message.
+
 ## [0.11.7] - 2026-07-10
 
 ### Changed

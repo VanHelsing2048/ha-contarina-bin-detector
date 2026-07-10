@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import base64
 import importlib
 import json
 import os
@@ -765,11 +766,17 @@ def error_image(message: str) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.11.4"
+    server_version = "ContarinaWebUi/0.11.8"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
             self.send_html(web_ui_html())
+            return
+        if self.path.startswith("/api/snapshot"):
+            self.send_snapshot_json(debug=False)
+            return
+        if self.path.startswith("/api/debug-snapshot"):
+            self.send_snapshot_json(debug=True)
             return
         if self.path.startswith("/snapshot"):
             self.send_snapshot()
@@ -857,6 +864,32 @@ class WebUiHandler(BaseHTTPRequestHandler):
             return
 
         self.send_image(data, "image/jpeg")
+
+    def send_snapshot_json(self, debug: bool) -> None:
+        try:
+            if debug:
+                data = capture_debug_snapshot(load_settings())
+            else:
+                data = capture_snapshot(load_settings())
+            self.send_json(
+                {
+                    "ok": True,
+                    "content_type": "image/jpeg",
+                    "image": base64.b64encode(data).decode("ascii"),
+                    "error": "",
+                }
+            )
+        except Exception as error:
+            message = str(error)
+            data = error_image(message)
+            self.send_json(
+                {
+                    "ok": False,
+                    "content_type": "image/svg+xml",
+                    "image": base64.b64encode(data).decode("ascii"),
+                    "error": message,
+                }
+            )
 
 
 def web_ui_html() -> str:
@@ -1029,13 +1062,12 @@ def web_ui_html() -> str:
 
     async function refreshSnapshot() {
       setStatus("Loading snapshot...");
-      const url = `snapshot?t=${Date.now()}`;
-      const response = await fetch(url);
-      const error = response.headers.get("X-Contarina-Error");
-      lastSnapshotError = error || "";
-      img.src = URL.createObjectURL(await response.blob());
-      if (error) {
-        setStatus(`Snapshot unavailable: <code>${escapeHtml(error)}</code>`);
+      const response = await fetch(`api/snapshot?t=${Date.now()}`);
+      const result = await response.json();
+      lastSnapshotError = result.error || "";
+      img.src = `data:${result.content_type};base64,${result.image}`;
+      if (!result.ok) {
+        setStatus(`Snapshot unavailable: <code>${escapeHtml(result.error)}</code>`);
       }
     }
 
@@ -1077,12 +1109,12 @@ def web_ui_html() -> str:
     document.getElementById("refresh").addEventListener("click", refreshSnapshot);
     document.getElementById("debug").addEventListener("click", async () => {
       setStatus("Loading debug snapshot...");
-      const response = await fetch(`debug-snapshot?t=${Date.now()}`);
-      const error = response.headers.get("X-Contarina-Error");
-      lastSnapshotError = error || "";
-      img.src = URL.createObjectURL(await response.blob());
-      if (error) {
-        setStatus(`Debug snapshot unavailable: <code>${escapeHtml(error)}</code>`);
+      const response = await fetch(`api/debug-snapshot?t=${Date.now()}`);
+      const result = await response.json();
+      lastSnapshotError = result.error || "";
+      img.src = `data:${result.content_type};base64,${result.image}`;
+      if (!result.ok) {
+        setStatus(`Debug snapshot unavailable: <code>${escapeHtml(result.error)}</code>`);
       }
     });
     document.getElementById("save").addEventListener("click", saveSettings);

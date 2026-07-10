@@ -4,6 +4,13 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.8] - 2026-07-10
+
+### Fixed
+
+- Changed Web UI snapshot loading to use JSON image payloads, avoiding Ingress/browser image-load fallback messages.
+- Snapshot errors now remain visible in the Web UI even when the placeholder image cannot be rendered.
+
 ## [0.11.7] - 2026-07-10
 
 ### Changed
