@@ -4,6 +4,12 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.12] - 2026-07-11
+
+### Fixed
+
+- Fixed the s6 service launcher so Home Assistant Supervisor environment variables, including `SUPERVISOR_TOKEN`, are available to the detector process.
+
 ## [0.11.11] - 2026-07-10
 
 ### Fixed

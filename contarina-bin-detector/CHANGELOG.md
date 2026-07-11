@@ -2,6 +2,12 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.12] - 2026-07-11
+
+### Fixed
+
+- Fixed the add-on service startup wrapper so `SUPERVISOR_TOKEN` and other Supervisor-provided environment variables are visible to the detector.
+
 ## [0.11.11] - 2026-07-10
 
 ### Fixed
