@@ -4,6 +4,12 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.14] - 2026-07-11
+
+### Changed
+
+- Changed the Web UI live status panel to refresh only when pressing the refresh button instead of polling every five seconds.
+
 ## [0.11.13] - 2026-07-11
 
 ### Added

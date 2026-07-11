@@ -881,7 +881,7 @@ def error_image(message: str) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.11.13"
+    server_version = "ContarinaWebUi/0.11.14"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
@@ -1059,7 +1059,10 @@ def web_ui_html() -> str:
       </div>
     </section>
     <section>
-      <h2>Live status</h2>
+      <div class="row">
+        <h2>Live status</h2>
+        <button class="secondary" id="refresh_live" type="button">Refresh values</button>
+      </div>
       <div class="live" id="live_status"></div>
     </section>
     <section>
@@ -1085,6 +1088,7 @@ def web_ui_html() -> str:
     const liveStatusEl = document.getElementById("live_status");
     const refreshButton = document.getElementById("refresh");
     const debugButton = document.getElementById("debug");
+    const refreshLiveButton = document.getElementById("refresh_live");
     let settings = null;
     let drawing = false;
     let start = null;
@@ -1164,11 +1168,14 @@ def web_ui_html() -> str:
     }
 
     async function refreshLiveStatus() {
+      refreshLiveButton.disabled = true;
       try {
         const data = await fetchJsonPayload(`api/live-status?t=${Date.now()}`);
         renderLiveStatus(data);
       } catch (error) {
         liveStatusEl.innerHTML = `<div class="metric"><span>Live status</span><strong>${escapeHtml(error.message)}</strong></div>`;
+      } finally {
+        refreshLiveButton.disabled = false;
       }
     }
 
@@ -1319,6 +1326,7 @@ def web_ui_html() -> str:
     });
     window.addEventListener("resize", syncCanvas);
     refreshButton.addEventListener("click", refreshSnapshot);
+    refreshLiveButton.addEventListener("click", refreshLiveStatus);
     debugButton.addEventListener("click", async () => {
       const requestId = ++snapshotRequestId;
       refreshButton.disabled = true;
@@ -1351,7 +1359,6 @@ def web_ui_html() -> str:
     loadSettings()
       .then(() => Promise.all([refreshSnapshot(), refreshLiveStatus()]))
       .catch((error) => setStatus(error.message));
-    window.setInterval(refreshLiveStatus, 5000);
   </script>
 </body>
 </html>"""

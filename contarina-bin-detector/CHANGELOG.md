@@ -2,6 +2,12 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.14] - 2026-07-11
+
+### Changed
+
+- Live Web UI values now refresh from a button instead of polling automatically every five seconds.
+
 ## [0.11.13] - 2026-07-11
 
 ### Added
