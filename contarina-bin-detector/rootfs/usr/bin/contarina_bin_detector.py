@@ -331,14 +331,23 @@ def home_assistant_get_state(entity_id: str) -> dict[str, Any] | None:
     if not token:
         return None
 
-    response = requests.get(
-        f"{CORE_API_BASE}/states/{entity_id}",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=10,
-    )
+    try:
+        response = requests.get(
+            f"{CORE_API_BASE}/states/{entity_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
+    except Exception as error:
+        log(f"Could not read Home Assistant state {entity_id}: {error}")
+        return None
+
     if response.status_code == HTTPStatus.NOT_FOUND:
         return None
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except Exception as error:
+        log(f"Could not read Home Assistant state {entity_id}: {error}")
+        return None
     return response.json()
 
 
@@ -663,6 +672,61 @@ def capture_debug_snapshot(settings: dict[str, Any]) -> bytes:
     return encode_snapshot(frame)
 
 
+def live_status_payload(settings: dict[str, Any]) -> dict[str, Any]:
+    frame, captured_at, last_error = latest_frame_copy()
+    request_background_capture(settings)
+    collection = expected_collection(settings)
+    scheduled = is_scheduled_now(settings)
+    age_seconds = max(0, int(time.time() - captured_at)) if captured_at else None
+
+    if frame is None:
+        return {
+            "ok": False,
+            "frame_ready": False,
+            "last_frame_age_seconds": age_seconds,
+            "last_capture_error": last_error,
+            "collection": collection,
+            "scheduled_now": scheduled,
+            "candidate_color": NONE_STATE,
+            "state": NONE_STATE,
+            "color_ratios": {color: 0.0 for color in COLORS},
+            "quality": {
+                "brightness": 0.0,
+                "contrast": 0.0,
+                "sharpness": 0.0,
+                "reliable": False,
+                "reason": "snapshot_non_pronto",
+            },
+        }
+
+    ratios = color_ratios(frame, settings)
+    quality = roi_quality(frame, settings)
+    state, candidate_color, _, _, collection, ratios, quality, scheduled = analyze_frame(
+        frame,
+        settings,
+        NONE_STATE,
+        0,
+    )
+    return {
+        "ok": True,
+        "frame_ready": True,
+        "last_frame_age_seconds": age_seconds,
+        "last_capture_error": last_error,
+        "collection": collection,
+        "scheduled_now": scheduled,
+        "candidate_color": candidate_color,
+        "state": state,
+        "color_ratios": {color: round(float(ratio), 4) for color, ratio in ratios.items()},
+        "quality": {
+            "brightness": round(float(quality["brightness"]), 1),
+            "contrast": round(float(quality["contrast"]), 1),
+            "sharpness": round(float(quality["sharpness"]), 1),
+            "reliable": bool(quality["reliable"]),
+            "reason": quality["reason"],
+        },
+    }
+
+
 def capture_fresh_frame(rtsp_url: str, warmup_seconds: float = 20.0) -> np.ndarray:
     try:
         return capture_fresh_frame_with_ffmpeg(rtsp_url, warmup_seconds)
@@ -817,7 +881,7 @@ def error_image(message: str) -> bytes:
 
 
 class WebUiHandler(BaseHTTPRequestHandler):
-    server_version = "ContarinaWebUi/0.11.11"
+    server_version = "ContarinaWebUi/0.11.13"
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
@@ -828,6 +892,9 @@ class WebUiHandler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/debug-snapshot"):
             self.send_snapshot_json(debug=True)
+            return
+        if self.path.startswith("/api/live-status"):
+            self.send_json(live_status_payload(load_settings()))
             return
         if self.path.startswith("/snapshot"):
             self.send_snapshot()
@@ -969,6 +1036,15 @@ def web_ui_html() -> str:
     canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
     .status { margin-top: 12px; color: #bcc8cf; font-size: 14px; }
     .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; color: #c9d4da; font-size: 13px; }
+    .live { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .metric { border: 1px solid #2d3a43; border-radius: 6px; padding: 10px; background: #172027; min-height: 56px; }
+    .metric span { display: block; color: #96a8b2; font-size: 12px; margin-bottom: 4px; }
+    .metric strong { display: block; color: #eef2f4; font-size: 18px; overflow-wrap: anywhere; }
+    .bar { height: 8px; border-radius: 4px; background: #2d3a43; margin-top: 8px; overflow: hidden; }
+    .fill { height: 100%; width: 0%; background: #46a758; }
+    .fill.yellow { background: #f5c542; }
+    .fill.blue { background: #1876b8; }
+    .fill.gray { background: #8b8d84; }
     code { color: #d8e7ff; }
   </style>
 </head>
@@ -981,6 +1057,10 @@ def web_ui_html() -> str:
       <div class="row" style="margin-top: 12px;">
         <button class="secondary" id="test_notification" type="button">Test notification</button>
       </div>
+    </section>
+    <section>
+      <h2>Live status</h2>
+      <div class="live" id="live_status"></div>
     </section>
     <section>
       <div class="row">
@@ -1002,6 +1082,7 @@ def web_ui_html() -> str:
     const ctx = canvas.getContext("2d");
     const statusEl = document.getElementById("status");
     const summaryEl = document.getElementById("summary");
+    const liveStatusEl = document.getElementById("live_status");
     const refreshButton = document.getElementById("refresh");
     const debugButton = document.getElementById("debug");
     let settings = null;
@@ -1039,6 +1120,56 @@ def web_ui_html() -> str:
         <div>Notifications: <code>${notify}</code></div>
       `;
       draw();
+    }
+
+    function formatRatio(value) {
+      return `${Math.round(Number(value || 0) * 1000) / 10}%`;
+    }
+
+    function formatAge(value) {
+      if (value === null || value === undefined) return "-";
+      if (value < 60) return `${value}s`;
+      return `${Math.floor(value / 60)}m ${value % 60}s`;
+    }
+
+    function colorMetric(label, cssClass, value) {
+      const ratio = Math.max(0, Math.min(1, Number(value || 0)));
+      return `
+        <div class="metric">
+          <span>${label}</span>
+          <strong>${formatRatio(ratio)}</strong>
+          <div class="bar"><div class="fill ${cssClass}" style="width: ${Math.round(ratio * 100)}%;"></div></div>
+        </div>
+      `;
+    }
+
+    function renderLiveStatus(data) {
+      const collection = data.collection || {};
+      const quality = data.quality || {};
+      const ratios = data.color_ratios || {};
+      liveStatusEl.innerHTML = `
+        <div class="metric"><span>ROI state</span><strong>${escapeHtml(data.state || "-")}</strong></div>
+        <div class="metric"><span>Candidate</span><strong>${escapeHtml(data.candidate_color || "-")}</strong></div>
+        <div class="metric"><span>Expected sensor</span><strong>${escapeHtml(collection.state || "-")}</strong></div>
+        <div class="metric"><span>Expected bin</span><strong>${escapeHtml(collection.expected_state || "-")}</strong></div>
+        <div class="metric"><span>Visibility</span><strong>${escapeHtml(quality.reason || "-")}</strong></div>
+        <div class="metric"><span>Last frame</span><strong>${formatAge(data.last_frame_age_seconds)}</strong></div>
+        ${colorMetric("Gray", "gray", ratios.gray)}
+        ${colorMetric("Yellow", "yellow", ratios.yellow)}
+        ${colorMetric("Blue", "blue", ratios.blue)}
+        <div class="metric"><span>Brightness</span><strong>${quality.brightness ?? "-"}</strong></div>
+        <div class="metric"><span>Contrast</span><strong>${quality.contrast ?? "-"}</strong></div>
+        <div class="metric"><span>Sharpness</span><strong>${quality.sharpness ?? "-"}</strong></div>
+      `;
+    }
+
+    async function refreshLiveStatus() {
+      try {
+        const data = await fetchJsonPayload(`api/live-status?t=${Date.now()}`);
+        renderLiveStatus(data);
+      } catch (error) {
+        liveStatusEl.innerHTML = `<div class="metric"><span>Live status</span><strong>${escapeHtml(error.message)}</strong></div>`;
+      }
     }
 
     async function fetchJsonPayload(url) {
@@ -1164,6 +1295,7 @@ def web_ui_html() -> str:
       renderSettings();
       setStatus("ROI saved.");
       refreshSnapshot();
+      refreshLiveStatus();
     }
 
     async function testNotification() {
@@ -1216,7 +1348,10 @@ def web_ui_html() -> str:
     document.getElementById("save").addEventListener("click", saveSettings);
     document.getElementById("test_notification").addEventListener("click", testNotification);
 
-    loadSettings().then(refreshSnapshot).catch((error) => setStatus(error.message));
+    loadSettings()
+      .then(() => Promise.all([refreshSnapshot(), refreshLiveStatus()]))
+      .catch((error) => setStatus(error.message));
+    window.setInterval(refreshLiveStatus, 5000);
   </script>
 </body>
 </html>"""

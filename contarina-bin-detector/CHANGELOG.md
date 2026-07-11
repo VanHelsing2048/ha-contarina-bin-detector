@@ -2,6 +2,12 @@
 
 Release notes for the Home Assistant add-on preview.
 
+## [0.11.13] - 2026-07-11
+
+### Added
+
+- Added live Web UI values for the ROI detection result, color ratios, image quality, and configured collection forecast sensor.
+
 ## [0.11.12] - 2026-07-11
 
 ### Fixed

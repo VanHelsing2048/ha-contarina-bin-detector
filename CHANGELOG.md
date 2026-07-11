@@ -4,6 +4,12 @@ All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses semantic versioning.
 
+## [0.11.13] - 2026-07-11
+
+### Added
+
+- Added a live status panel to the Web UI showing current ROI detection values, color ratios, image quality metrics, and the configured collection forecast sensor state.
+
 ## [0.11.12] - 2026-07-11
 
 ### Fixed
